@@ -2,6 +2,9 @@ name: Build Android APK
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
@@ -28,30 +31,50 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install native build tools
+        shell: bash
         run: |
+          set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build build-essential curl unzip
+          sudo apt-get install -y \
+            autoconf automake bzip2 build-essential cmake curl libtool ninja-build \
+            pkg-config python3 unzip xz-utils zip
 
       - name: Install Android SDK and NDK packages
+        shell: bash
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
         run: |
-          yes | sdkmanager --licenses
-          sdkmanager \
+          set -euo pipefail
+          test -d "$ANDROID_HOME/cmdline-tools"
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          if [[ -z "$SDKMANAGER" || ! -x "$SDKMANAGER" ]]; then
+            echo "Could not find an executable sdkmanager under $ANDROID_HOME/cmdline-tools" >&2
+            exit 1
+          fi
+          echo "Using sdkmanager: $SDKMANAGER"
+          (yes || true) | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --install \
             "platform-tools" \
             "platforms;android-36" \
             "build-tools;36.0.0" \
             "ndk;27.2.12479018"
+          test -x "$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+          {
+            echo "ANDROID_HOME=$ANDROID_HOME"
+            echo "ANDROID_SDK_ROOT=$ANDROID_HOME"
+            echo "NDK=$ANDROID_HOME/ndk/27.2.12479018"
+            echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018"
+            echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/27.2.12479018"
+          } >> "$GITHUB_ENV"
 
       - name: Prepare the build toolchain
         shell: bash
         run: |
           set -euo pipefail
           PRIV="$HOME/stremiobrew-build"
-          mkdir -p "$PRIV/android" "$PRIV/src/SDL2-2.30.12"
-          ln -sfn "$ANDROID_HOME" "$PRIV/android/sdk"
+          mkdir -p "$PRIV/android" "$PRIV/src/SDL2-2.30.12" "$HOME/.android"
 
           curl -fL --retry 3 \
             https://services.gradle.org/distributions/gradle-8.11.1-bin.zip \
@@ -71,35 +94,49 @@ jobs:
           tar -xzf "$RUNNER_TEMP/SDL2-2.30.12.tar.gz" \
             --strip-components=1 -C "$PRIV/src/SDL2-2.30.12"
 
-          echo "NDK=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
-          echo "ANDROID_HOME=$PRIV/android/sdk" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$PRIV/android/sdk" >> "$GITHUB_ENV"
+          tar -tjf "$PRIV/src/mbedtls-3.6.2.tar.bz2" >/dev/null
+          tar -tJf "$PRIV/src/curl-8.11.1.tar.xz" >/dev/null
+          test -f "$PRIV/src/SDL2-2.30.12/CMakeLists.txt"
 
-      - name: Create a temporary Android debug keystore
+      - name: Create and verify temporary Android debug keystore
+        shell: bash
         run: |
+          set -euo pipefail
           mkdir -p "$HOME/.android"
-          keytool -genkeypair -noprompt \
+          keytool -genkeypair -noprompt -storetype JKS \
             -keystore "$HOME/.android/debug.keystore" \
             -storepass android -keypass android \
             -alias androiddebugkey -keyalg RSA -keysize 2048 \
             -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
+          keytool -list -keystore "$HOME/.android/debug.keystore" \
+            -storepass android -alias androiddebugkey >/dev/null
 
       - name: Build native dependencies (arm64-v8a only)
-        run: tools/phone/build-deps.sh arm64-v8a
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools/phone/build-deps.sh arm64-v8a
 
       - name: Build native application (arm64-v8a only)
-        run: tools/phone/build.sh arm64-v8a
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools/phone/build.sh arm64-v8a
 
       - name: Assemble arm64-v8a debug APK
+        shell: bash
         env:
           TARGET_ABIS: arm64-v8a
-        run: tools/phone/apk.sh debug
+        run: |
+          set -euo pipefail
+          tools/phone/apk.sh debug
+          test -s "dist/stremio-origin-phone-1.1.0-arm64-v8a-debug.apk"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: stremio-origin-android-arm64-debug-apk
-          path: dist/*-arm64-v8a-debug.apk
+          path: dist/stremio-origin-phone-1.1.0-arm64-v8a-debug.apk
           if-no-files-found: error
           retention-days: 14
