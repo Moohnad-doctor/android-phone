@@ -83,7 +83,7 @@ static int seek_step(void) { int s = atoi(store_get("seekStep", "10")); return s
 static void keep(void) { hideAt = app_now() + 4.5; }
 static int ui_on(void) { return uiA.to > 0.5f; }
 static void ui_show(int on) { tween_to(&uiA, on ? 1 : 0, on ? 0.2f : 0.3f, EASE_CSS_EASE); if (on) keep(); }
-static void fmt(double t, char *o, size_t cap) { int s = (int)(t < 0 ? 0 : t); if (s >= 3600) snprintf(o, cap, "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60); else snprintf(o, cap, "%d:%02d", s / 60, s % 60); }
+static void fmt(double t, char *o, size_t cap) { int s = (int)(t < 0 ? 0 : t); if (s >= 3600) snprintf(o, cap, "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60); else snprintf(o, cap, "%02d:%02d", s / 60, s % 60); }
 /* Download playback is resumable without a network or account. Keys are stable across app
    launches and use the same content/episode identity as the download registry. */
 static char watchActive[180];
@@ -629,7 +629,7 @@ void phone_player_draw(void) {
     /* the top: slides up as it goes */
     gfx_offset_push(0, -(1 - a) * 150); gfx_opacity_push(1 - seekK.v);
     gfx_rrect(SB_W / 2 - 36, 14, 72, 8, 4, WHITE_A(130)); /* a handle at the top: a swipe down closes it */
-    hud_circle(38, TOPY, TOPR, "chevron-left", 0, a_back, 0); /* Back stays top-left; title and episode move above the seek bar. */
+    hud_circle(64, TOPY, TOPR, "chevron-left", 0, a_back, 0); /* Back stays top-left; title and episode move above the seek bar. */
     { int cs = cast_icon_state(); if (cs == 0) gfx_opacity_push(0.5f); hud_circle(TVX, TOPY, TOPR, cs == 3 ? "ph_cast_on" : "ph_cast", 0, a_tv, 0); /* (connected: the TV-connected icon, nothing else) */ if (cs == 0) gfx_opacity_pop();
       if (cs == 2) { float ph = fmodf((float)app_now(), 1.2f) / 1.2f, rr = TOPR * 0.55f + 2.2f + 7.7f * ph; gfx_ring(TVX - rr, TOPY - rr, 2 * rr, 2 * rr, rr, 1.4f, col_alpha(ACC2 | 0xff000000u, 0.7f * (1 - ph))); } } hud_circle(LOCKX, TOPY, TOPR, "lock", 0, a_lock, 0);
     { Item it_; char v_[96]; const Stream *s_; if (player_now(&it_, v_, sizeof v_, &s_) && !strncmp(s_->url, "file:", 5)) { /* playing a download: where the download button would be, a quiet glass capsule saying it plays from the phone (no connection needed); a tap opens Downloads */
