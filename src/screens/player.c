@@ -489,7 +489,7 @@ static void try_resume(void) {
 }
 
 /* ---- subtitles ---- */
-static const char *want_sub(void) { return store_get("subsLang", "eng"); }
+static const char *want_sub(void) { return store_get("subsLang", !strcmp(i18n_lang(), "ar") ? "ara" : "eng"); }
 /* Settings > Subtitles > Subtitle preference: Forced only = a film starts with a forced track in that language (only
    the lines in another language and the signs), or none; All subtitles = as always (PR #50) */
 static int want_forced(void) { return !strcmp(store_get("subsMode", "all"), "forced"); }
