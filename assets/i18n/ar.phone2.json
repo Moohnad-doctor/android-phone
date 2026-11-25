@@ -45,13 +45,13 @@
   "Use email and password": "استخدم البريد الإلكتروني وكلمة المرور",
   "Popular movies": "أفلام رائجة",
   "Popular series": "مسلسلات رائجة",
-  "All years": "كل السنوات",
+  "All years": "الكل",
   "Classic": "كلاسيكي",
   "Most popular": "الأكثر شهرة",
   "Now playing": "يعرض الآن",
   "Newest airing": "الأحدث عرضًا",
   "Highest rated": "الأعلى تقييمًا",
-  "All genres": "كل التصنيفات",
+  "All genres": "الكل",
   "{n} episodes": "{n} حلقات",
   "Two episodes": "حلقتان",
   "Trending now": "الرائج الآن",
@@ -67,5 +67,10 @@
   "Horror": "رعب",
   "Adventure": "مغامرة",
   "None found": "لم يتم العثور على نتائج",
-  "Popular films and series. Search titles and people from your addons.": "أفلام ومسلسلات رائجة. ابحث عن العناوين والأشخاص في إضافاتك."
+  "Popular films and series. Search titles and people from your addons.": "أفلام ومسلسلات رائجة. ابحث عن العناوين والأشخاص في إضافاتك.",
+  "2020–2023": "2020–2023",
+  "Release year": "سنة العرض",
+  "Sort / airing": "الترتيب / العرض",
+  "Genre": "التصنيف",
+  "All": "الكل"
 }
