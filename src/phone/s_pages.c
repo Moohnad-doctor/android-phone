@@ -369,7 +369,7 @@ Screen phDl = { dl_enter, NULL, dl_key, NULL, dl_draw, NULL, NULL, NULL, NULL };
 Screen phLib = { lib_enter, NULL, lib_key, lib_tick, lib_draw, lib_focused, NULL, NULL, NULL };
 
 /* ---- Search ---- */
-#define MAXQ 64
+#define MAXQ 256
 static struct { char q[160]; double typedAt; int asked, sugAsked, editing; CatalogDef defs[MAXQ]; ItemList res[MAXQ]; int nd, got; char sug[6][128]; int nsug; ItemList sugItems; unsigned gen; Scroll v; int fr, fi; } Q;
 static void q_got(ItemList *l, int cached, void *ud) {
   (void)cached;
