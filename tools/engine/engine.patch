@@ -716,7 +716,7 @@ index 7e07ad0..7589d65 100644
      const auto& focused = demands.back();
      result.focused_demand_id = focused.id;
      result.cold = focused.kind == DemandKind::prefetch || focused.cold;
-@@ -40,7 +77,9 @@
+@@ -40,6 +77,9 @@
      const auto critical_bytes = result.cold
          ? std::uint64_t{0}
          : std::min(
@@ -728,13 +728,13 @@ index 7e07ad0..7589d65 100644
 +                  focused.file_size
 +              )
            );
-@@ -66,5 +105,5 @@
+@@ -66,4 +106,4 @@
      const auto index_bytes = std::min(
 -        std::max(window.tail_bytes, focused.file_size / 64),
 +        std::max(window.tail_bytes, focused.file_size / 100),
          focused.file_size
      );
-@@ -124,6 +163,7 @@ StreamDemandPlan build_stream_demand_plan(
+@@ -124,6 +164,7 @@ StreamDemandPlan build_stream_demand_plan(
              result.deadline_order.push_back(piece);
          }
      }
