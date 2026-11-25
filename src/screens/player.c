@@ -438,15 +438,15 @@ static void ep_back_check(void) {
   fprintf(stderr, "[lib] watching again from this episode: it is the series' place now, %d later episode(s) unwatched\n", n);
 }
 static void offline_progress_save(double position, double duration) {
-  if (strncmp(P.url, "file:", 5) || !P.id[0] || !P.vid[0] || duration <= 0) return;
-  char key[180]; snprintf(key, sizeof key, "%s|%s", P.id, P.vid);
+  if (strncmp(P.url, "file:", 5) || !P.id[0] || duration <= 0) return;
+  const char *videoId = P.vid[0] ? P.vid : P.id; char key[180]; snprintf(key, sizeof key, "%s|%s", P.id, videoId);
   cJSON *old = store_node("offlineProgress"), *root = old ? cJSON_Duplicate(old, 1) : cJSON_CreateObject();
   if (!root) return;
   cJSON_DeleteItemFromObject(root, key);
   cJSON *v = cJSON_CreateObject(); if (!v) { cJSON_Delete(root); return; }
   cJSON_AddNumberToObject(v, "position_ms", position * 1000.0);
   cJSON_AddNumberToObject(v, "duration_ms", duration * 1000.0);
-  cJSON_AddStringToObject(v, "download_id", P.vid);
+  cJSON_AddStringToObject(v, "download_id", videoId);
   cJSON_AddStringToObject(v, "content_id", P.id);
   cJSON_AddItemToObject(root, key, v);
   store_set_node("offlineProgress", root);
@@ -475,8 +475,8 @@ static void try_resume(void) {
   if (live_title()) return; /* a broadcast plays from where it is now */
   if (P.startAt < 0) return; /* "Watch from the beginning" */
   if (P.startAt > 0) { video_seek(P.startAt); return; } /* another source: same moment */
-  if (!strncmp(P.url, "file:", 5) && P.id[0] && P.vid[0]) {
-    char key[180]; snprintf(key, sizeof key, "%s|%s", P.id, P.vid);
+  if (!strncmp(P.url, "file:", 5) && P.id[0]) {
+    const char *videoId = P.vid[0] ? P.vid : P.id; char key[180]; snprintf(key, sizeof key, "%s|%s", P.id, videoId);
     const cJSON *v = js_obj(store_node("offlineProgress"), key);
     double ms = js_num(v, "position_ms", 0), dm = js_num(v, "duration_ms", 0), sec = ms / 1000.0, d0 = dur();
     if (sec > 5 && (!dm || !d0 || sec < d0 - 30)) { video_seek(sec); char ft[32]; fmt_time(sec, ft, sizeof ft); snprintf(resumeMsg, sizeof resumeMsg, "%s%s", T("Resuming from "), ft); return; }
