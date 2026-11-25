@@ -136,18 +136,18 @@ static void dr_read(DlRow *r, long long got, long long size, long long spd, int 
 /* the seasons shown open; what is picked in Select */
 static char dlOpen[64][260]; static int nOpen;
 static int is_open(const char *k) { for (int i = 0; i < nOpen; i++) if (!strcmp(dlOpen[i], k)) return 1; return 0; }
-static void grp_key(const Dl *d, char *k, size_t c) { if (ph_dl_group_is_coll(d)) snprintf(k, c, "%s", d->group); else snprintf(k, c, "%s|%s", d->id, d->group); } /* (a collection's films: one group across their titles) */
+static void grp_key(const Dl *d, char *k, size_t c) { if (ph_dl_group_is_coll(d)) snprintf(k, c, "%s", d->group); else if (!strcmp(d->type, "series")) snprintf(k, c, "series:%s", d->id); else snprintf(k, c, "%s|%s", d->id, d->group); } /* (a collection's films: one group across their titles) */
 static int selMode; static Tween selT; static char selK[128][110]; static int nSel;
 static void sel_key(const Dl *d, char *k, size_t c) { snprintf(k, c, "%s|%s", d->id, d->vid); }
 static int is_sel(const Dl *d) { char k[110]; sel_key(d, k, sizeof k); for (int i = 0; i < nSel; i++) if (!strcmp(selK[i], k)) return 1; return 0; }
 static void sel_set(const Dl *d, int on) { char k[110]; sel_key(d, k, sizeof k); for (int i = 0; i < nSel; i++) if (!strcmp(selK[i], k)) { if (!on) { memmove(selK[i], selK[i + 1], (size_t)(nSel - i - 1) * sizeof selK[0]); nSel--; } return; } if (on && nSel < 128) snprintf(selK[nSel++], 110, "%s", k); }
-static int same_grp(const Dl *a, const Dl *b) { return !strcmp(a->group, b->group) && (ph_dl_group_is_coll(a) || !strcmp(a->id, b->id)); }
+static int same_grp(const Dl *a, const Dl *b) { if (ph_dl_group_is_coll(a) || ph_dl_group_is_coll(b)) return ph_dl_group_is_coll(a) && ph_dl_group_is_coll(b) && !strcmp(a->group, b->group); if (!strcmp(a->type, "series") && !strcmp(b->type, "series")) return !strcmp(a->id, b->id); return !strcmp(a->group, b->group) && !strcmp(a->id, b->id); }
 static int grp_count(const Dl *d) { int n = 0; for (int j = 0; j < ph_dl_count(); j++) if (same_grp(ph_dl_get(j), d)) n++; return n; }
 static int grp_all_sel(const Dl *d) { for (int j = 0; j < ph_dl_count(); j++) { const Dl *o = ph_dl_get(j); if (same_grp(o, d) && !is_sel(o)) return 0; } return 1; }
 static void grp_sel(const Dl *d, int on) { for (int j = 0; j < ph_dl_count(); j++) { const Dl *o = ph_dl_get(j); if (same_grp(o, d)) sel_set(o, on); } }
 /* deleting: the file, the engine's task and its part files, the entry; then "Deleted" */
 static void del_vid(const char *id, const char *vid) { for (int j = ph_dl_count() - 1; j >= 0; j--) { const Dl *o = ph_dl_get(j); if (!strcmp(o->id, id) && !strcmp(o->vid, vid)) { ph_dl_remove(j); return; } } }
-static void del_grp(const char *id, const char *g) { int cl = !strncmp(g, "coll:", 5); for (int j = ph_dl_count() - 1; j >= 0; j--) { const Dl *o = ph_dl_get(j); if ((cl || !strcmp(o->id, id)) && !strcmp(o->group, g)) ph_dl_remove(j); } }
+static void del_grp(const char *id, const char *g) { int cl = !strncmp(g, "coll:", 5), series = !strncmp(g, "series:", 7); for (int j = ph_dl_count() - 1; j >= 0; j--) { const Dl *o = ph_dl_get(j); if (series ? (!strcmp(o->type, "series") && !strcmp(o->id, id)) : ((cl || !strcmp(o->id, id)) && !strcmp(o->group, g))) ph_dl_remove(j); } }
 static void tip_ok(int a, int b) { (void)a; (void)b; store_set("dlTipSeen", "true"); pplat_haptic_k(HK_PICK, 0.6f); }
 static int dl_hold_ended(void);
 static void dl_pause_act(int i, int b) { (void)b; if (dl_hold_ended()) return; ph_dl_retry(i); pplat_haptic_k(HK_PICK, 0.6f); } /* its own button: pause or go on */
@@ -251,7 +251,7 @@ static float dl_card(int i, float y, float ink) {
     tween_to(&R->sel, selMode ? 1 : 0, 0.3f, EASE_WEB); tween_tick(&R->sel, phDt); float sk = R->sel.v, inset = 64 * sk; /* Select: a round tick slides in on the left */
     int picked = grp ? grp_all_sel(d) : is_sel(d);
     float sx = swipe(R, x, y, w, h); swipe_under(R, x, y, w, h + extra, sx, 24); gfx_offset_push(-sx, 0); { float lk = 1 - 0.015f * R->lift.v; gfx_scale_push(lk, lk, x + w / 2, y + h / 2); } if (R->lift.v > 0.01f) gfx_shadow(x, y + 8 * R->lift.v, w, h, 24, 24 * R->lift.v, BLACK_A((int)(110 * R->lift.v))); /* taken: it lifts a little off the page */
-    gfx_rrect(x, y, w, h + extra, 24, SURF); gfx_ring(x, y, w, h + extra, 24, 1, picked && selMode ? col_alpha(ACC2 | 0xff000000u, 0.9f) : WHITE_A(12));
+    gfx_rrect(x, y, w, h + extra, 24, SURF);\n    if (d->bg[0]) { GLuint backdrop = img_get_shaped(d->bg, (int)w, (int)h, 24, 2); if (backdrop) { gfx_image(backdrop, x, y, w, h, 0, WHITE_A(105), 0, 1, 1, 0); gfx_rrect_v(x, y, w, h, 24, BLACK_A(105), BLACK_A(205)); } }\n    gfx_ring(x, y, w, h + extra, 24, 1, picked && selMode ? col_alpha(ACC2 | 0xff000000u, 0.9f) : WHITE_A(12));
     float pk = press_k(x, y, w, h); if (pk > 0 && sx < 2) gfx_rrect(x, y, w, h, 24, WHITE_A((int)(14 * pk)));
     if (sk > 0.01f) { float cx = x + 20 + 22 * sk, cy = y + h / 2; gfx_opacity_push(sk); gfx_ring(cx - 16, cy - 16, 32, 32, 16, 2, picked ? ACC2 : WHITE_A(110)); if (picked) { gfx_circle(cx, cy, 16, ACC2 | 0xff000000u); icon_draw("ph_check", cx - 12, cy - 12, 24, RGB(14, 12, 20)); } gfx_opacity_pop(); }
     float pw = 120, ph = 180, px = x + 15 + inset; int cg = grp && ph_dl_group_is_coll(d); const char *pst = d->poster; /* (a collection: its own poster and name, its films under it) */
@@ -259,7 +259,7 @@ static float dl_card(int i, float y, float ink) {
     GLuint t = pst[0] ? img_get_shaped(pst, (int)pw, (int)ph, 14, 2) : 0; if (!t || !ph_picture(t, px, y + 15, pw, ph, 14, WHITE_A(255))) ph_box(px, y + 15, pw, ph, 14);
     float tx = px + pw + 22, tw = x + w - tx - (!grp && d->state != DL_DONE && d->url[0] ? 170 : 96); int nl = text_draw_wrapped(cg ? ph_dl_group_name(d) : d->name, tx, y + 22, tw, cg ? 2 : 1 + !d->ep[0], F_BODY + 1, 800, TXT, 0, ALIGN_START, 34);
     char sub[200], c1[16]; if (grp) { snprintf(c1, sizeof c1, "%d", cnt); char r1[16], r2[16]; snprintf(r1, sizeof r1, "%d", emin); snprintf(r2, sizeof r2, "%d", emax);
-      if (cg) snprintf(sub, sizeof sub, "%s", T1("{n} films", "n", c1)); else snprintf(sub, sizeof sub, "%s  \xc2\xb7  %s", d->group, emax - emin + 1 == ne && emin > 0 ? T2("Episodes {a}\xe2\x80\x93{b}", "a", r1, "b", r2) : T1("{n} episodes", "n", c1)); } else snprintf(sub, sizeof sub, "%s", d->ep);
+      if (cg) snprintf(sub, sizeof sub, "%s", T1("{n} films", "n", c1)); else snprintf(sub, sizeof sub, "%s", T1("{n} episodes", "n", c1)); } else snprintf(sub, sizeof sub, "%s", d->ep);
     if (sub[0]) text_draw(sub, tx, y + 26 + nl * 34, F_SMALL, 600, TXT2, 0, tw, ALIGN_START);
     const char *stw; char sw[96]; if (grp) { char c2[16]; snprintf(c1, sizeof c1, "%d", done); snprintf(c2, sizeof c2, "%d", cnt); if (done == cnt) stw = T("Downloaded"); else if (choose) stw = T("Finding streams"); else if (run) { snprintf(sw, sizeof sw, "%s", T2("Downloading  {a} of {b}", "a", c1, "b", c2)); stw = sw; } else if (bad) stw = T("Some have no stream: open to try again"); else stw = T("Paused"); } else stw = ph_dl_wait_word(d) ? ph_dl_wait_word(d) : st_word(st);
     int warm = st == DL_CHOOSING; uint32_t scol = st == DL_FAILED || st == DL_NOSTREAM ? RGB(0xef, 0x8f, 0x8a) : st == DL_RUNNING ? ACC2 : st == DL_DONE ? ACC3 : TXT2;
@@ -279,7 +279,7 @@ static float dl_card(int i, float y, float ink) {
       else if (!warm) { float pz = R->paused.v; gfx_circle(bx, by, 36, WHITE_A(20)); gfx_opacity_push(1 - pz); icon_draw("p_pause", bx - 18, by - 18, 36, WHITE_A(235)); gfx_opacity_pop(); gfx_opacity_push(pz); icon_draw(st == DL_FAILED || st == DL_NOSTREAM ? "restart" : "play", bx - 18, by - 18, 36, WHITE_A(235)); gfx_opacity_pop(); } }
     if (sx < 2) { int two = !grp && st != DL_DONE && !warm && d->url[0] && st != DL_FAILED && st != DL_NOSTREAM; hit_act(x, y, w - (grp ? 90 : two ? 170 : 0), h, grp ? grp_tap : dl_tap, i, 0); /* (its own two buttons on the right while it comes; else all of it plays) */ if (!grp && dl_held(x, y, w, h)) dl_info_open(i); }
     /* its episodes */
-    if (ok > 0.004f) { float ry = y + h; int r = 0; for (int j = 0; j < n; j++) { const Dl *o = ph_dl_get(j); if (!same_grp(o, d)) continue;
+    if (ok > 0.004f) { float ry = y + h; int r = 0, order[64], no = 0;\n      for (int j = 0; j < n && no < 64; j++) if (same_grp(ph_dl_get(j), d)) order[no++] = j;\n      for (int a = 1; a < no; a++) { int v = order[a], vs = 0, ve = 0; const char *vp = strchr(ph_dl_get(v)->vid, ':'); if (vp) sscanf(vp + 1, "%d:%d", &vs, &ve); int b = a; while (b > 0) { int ps = 0, pe = 0; const char *pp = strchr(ph_dl_get(order[b - 1])->vid, ':'); if (pp) sscanf(pp + 1, "%d:%d", &ps, &pe); if (ps < vs || (ps == vs && pe <= ve)) break; order[b] = order[b - 1]; b--; } order[b] = v; }\n      for (int oi = 0; oi < no; oi++) { int j = order[oi]; const Dl *o = ph_dl_get(j);
         float rk = clampf(ok * 1.5f - r * 0.1f, 0, 1); rk = 1 - (1 - rk) * (1 - rk); r++; DlRow *E = dr(o->vid); E->nconns = o->conns; dr_read(E, o->state == DL_DONE ? o->size : o->got, o->size, o->state == DL_RUNNING ? o->speed : 0, 0);
         float colk = E->gone ? clampf((float)((app_now() - E->goneAt - 0.16) / 0.26), 0, 1) : 0; colk = colk * colk * (3 - 2 * colk); /* gone off the side: its room folds shut, the rows below glide up */
         gfx_opacity_push(rk * (1 - colk)); gfx_offset_push(0, (1 - rk) * -14); float rx = x + 8, rw = w - 16, rh = (rowH - 8) * (1 - colk); gfx_clip_push(rx - 2, ry, rw + 4, rh + 2);
