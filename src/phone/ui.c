@@ -13,13 +13,13 @@
 
 static void back_act(int a, int b) { (void)a; (void)b; app_back(); }
 void top_bar(const char *title, int back, float scrolled) {
-  float h = INS_T + 88, k = scrolled <= 0 ? 0 : scrolled > 120 ? 1 : scrolled / 120; k = k * k * (3 - 2 * k); /* eased: it comes in softly with the scroll */
+  float base = phone_free_top(), h = base + 64, k = scrolled <= 0 ? 0 : scrolled > 120 ? 1 : scrolled / 120; k = k * k * (3 - 2 * k); /* eased: it comes in softly with the scroll */
   phone_top_glass(h, k);
   float x = PAD;
   (void)back; if (0) { float bx = 10, by = INS_T + 10; /* (no back arrow: a page goes back by a swipe from its left edge, or the bar's Back) */ float pk = press_k(0, INS_T, 90, 88); if (pk > 0) gfx_circle(bx + 36, by + 34, 32, WHITE_A((int)(30 * pk)));
     icon_draw("ph_back", bx + 16, by + 14, 40, WHITE_A(255)); hit_act(0, INS_T, 90, 88, back_act, 0, 0); x = 92; }
   if (title && *title) { float ta = title[0] == 1 ? k : 1; const char *t = title[0] == 1 ? title + 1 : title; /* a leading \001: the title comes in with the glass */
-    if (ta > 0.01f) { gfx_opacity_push(ta); text_draw(t, x, INS_T + 44 - text_line_height(F_H2) / 2.0f + 8 * (1 - ta), F_H2, 800, TXT, -0.3f, SB_W - x - PAD - 80, ALIGN_START); gfx_opacity_pop(); } }
+    if (ta > 0.01f) { gfx_opacity_push(ta); text_draw(t, x, base + 28 - text_line_height(F_H2) / 2.0f + 8 * (1 - ta), F_H2, 800, TXT, -0.3f, SB_W - x - PAD - 80, ALIGN_START); gfx_opacity_pop(); } }
 }
 
 /* a card going away (removed from the Library, or off Continue Watching once watched): it shrinks and fades while
