@@ -327,7 +327,7 @@ static void hc_page_got(ItemList *l, int more, void *ud) {
   }
   HC.skip += got;
   /* When an addon omits hasMore, keep paging while it returns new items; stop on empty or repeated pages. */
-  HC.more = more < 0 ? (got > 0 && added > 0) : more != 0;
+  HC.more = got > 0 && added > 0 && (more < 0 || more != 0);
   if (!got) HC.more = 0;
   HC.pageRetryAt = 0;
   itemlist_free(l); hc_apply();
