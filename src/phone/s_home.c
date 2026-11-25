@@ -306,7 +306,7 @@ static void hc_got(ItemList *l, int cached, void *ud) {
   (void)cached;
   if ((unsigned)(uintptr_t)ud != HC.gen) { if (l) itemlist_free(l); return; }
   HC.busy = 0;
-  if (l) { itemlist_clear(&HC.all); HC.all = *l; free(l); HC.skip = HC.all.n; HC.more = HC.all.n >= 16; HC.pageBusy = 0; hc_apply(); }
+  if (l) { itemlist_clear(&HC.all); HC.all = *l; free(l); HC.skip = HC.all.n; HC.more = HC.all.n > 0; HC.pageBusy = 0; hc_apply(); }
 }
 static void hc_page_got(ItemList *l, int more, void *ud) {
   if ((unsigned)(uintptr_t)ud != HC.gen) { if (l) itemlist_free(l); return; }
