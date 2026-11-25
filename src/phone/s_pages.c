@@ -16,6 +16,8 @@
 #include "core/coll.h"
 #include "core/stremio.h"
 #include "core/addons.h"
+#include "screens/login.h"
+#include "ui/qr.h"
 #include <math.h>
 
 /* ---- Library ---- */
@@ -454,7 +456,7 @@ Screen phSearch = { q_enter, q_leave, q_key, q_tick, q_draw, q_focused, NULL, q_
 
 
 /* ---- sign-in ---- */
-static struct { char email[128], pass[128]; int field, busy, errF, reveal; double errAt; char err[200]; } G; /* errF: where the error shows: 0 under Email, 1 under Password, 2 under Continue */
+static struct { char email[128], pass[128]; int field, busy, errF, reveal, qrMode; double errAt; char err[200]; } G; /* errF: where the error shows: 0 under Email, 1 under Password, 2 under Continue */
 static void on_lib(int changed, void *ud) { (void)changed; (void)ud; app_refresh_boards(); }
 static void on_addons(int changed, void *ud) { (void)changed; (void)ud; }
 static void g_error(int f, const char *msg) { G.errF = f; G.errAt = app_now(); snprintf(G.err, sizeof G.err, "%s", msg); pplat_haptic_k(HK_THUD, 1); }
@@ -472,7 +474,7 @@ static TEd gE, gP; static TEd *g_ed(void) { if (!gE.s) { gE.s = G.email; gE.cap 
 static void field2_act(int a, int b) { (void)b; G.field = a; phone_keyboard(1); }
 static void g_text(const char *t) { char *f = G.field ? G.pass : G.email; if (G.err[0] && (G.errF == G.field || G.errF == 2)) G.err[0] = 0; /* typing again: it goes */ (void)f; ted_insert(g_ed(), t); }
 static Orbs gOrbs; static double gT0;
-static void g_enter(const void *p) { (void)p; bg_clear(); if (!G.email[0]) { const char *em = js_str(store_node("user"), "email", ""); if (*em) { snprintf(G.email, sizeof G.email, "%s", em); G.field = 1; } } /* (signed in before: its email already there) */ G.busy = 0; memset(&gOrbs, 0, sizeof gOrbs); orbs_place(&gOrbs, 0, 2.2f); gT0 = app_now(); }
+static void g_enter(const void *p) { (void)p; bg_clear(); G.qrMode = 0; login_qr_start(); if (!G.email[0]) { const char *em = js_str(store_node("user"), "email", ""); if (*em) { snprintf(G.email, sizeof G.email, "%s", em); G.field = 1; } } /* (signed in before: its email already there) */ G.busy = 0; memset(&gOrbs, 0, sizeof gOrbs); orbs_place(&gOrbs, 0, 2.2f); gT0 = app_now(); }
 static void link_act(int a, int b) { (void)b; phone_keyboard(0); pplat_open_url(a ? "https://www.strem.io/reset-password/" : "https://web.stremio.com/#/intro?form=sign-up"); }
 void ph_liquid_bubble(float x, float y, float w, float h, float r, float press); void ph_glass_grab_liquid(void);
 /* a field as a line: its words over a hairline that turns the accent while typing in it */
@@ -481,6 +483,9 @@ static float g_err_line(float x, float y, float w) { float k = ease_apply(EASE_O
   gfx_opacity_push(k); gfx_offset_push(0, -8 * (1 - k)); uint32_t c = RGB(0xff, 0x8a, 0x80); float lh = text_line_height(F_SMALL);
   gfx_circle(x + 6, y + lh / 2, 6, c); int n = text_draw_wrapped(G.err, x + 24, y, w - 24, 2, F_SMALL, 600, c, 0, ALIGN_START, lh + 4);
   gfx_offset_pop(); gfx_opacity_pop(); return n * (lh + 4) + 14; }
+static void g_qr_act(int a, int b) { (void)a; (void)b; G.qrMode = !G.qrMode; G.err[0] = 0; phone_keyboard(0); pplat_haptic_k(HK_PICK, 0.5f); }
+static void g_leave(void) { phone_keyboard(0); login_qr_stop(); }
+static void g_tick(float dt) { login_qr_tick(dt); }
 static void g_reveal_act(int a, int b) { (void)a; (void)b; G.reveal = !G.reveal; pplat_haptic_k(HK_PICK, 0.5f); }
 static void g_field(float x, float y, float w, const char *value, const char *hint, int focused, int secret, int idx) {
   int bad = G.err[0] && G.errF == idx; float st = (float)(app_now() - G.errAt), sh = bad && st < 0.45f ? sinf(st * 46) * 12 * (1 - st / 0.45f) : 0; /* a little shake where it went wrong */
@@ -510,6 +515,7 @@ static void g_draw(void) {
     gfx_rrect_v(x + 30, y + (h - ic) / 2, ic, ic, ic / 2, RGB(0x6a, 0x45, 0xe0), RGB(0x2f, 0x1a, 0x9e)); { float S = ic * 512 / 264.0f, cx = x + 30 + ic / 2, cy = y + h / 2; icon_draw("o_play", cx - S * 256 / 512, cy - S * 226 / 512, S, WHITE_A(255)); }
     text_draw("myth", x + 30 + ic + 18, y + h / 2 - text_line_height(30) / 2.0f, 30, 800, WHITE_A(250), 2, 0, ALIGN_LEFT); gfx_offset_pop(); y += h + SB_H * 0.07f * (1 - kb) + 36 * kb;
     if (KB_H > 0) { float need = 96 + 84 + 108 + 128 + 84 + (G.err[0] ? 60 : 0), over = y + need - (SB_H - KB_H - 24); if (over > 0) y -= over; } } /* the rest above the keyboard (under the mark if it must) */
+  if (!G.qrMode) {
     { float k = ease_apply(EASE_OUT, (t - 0.08f) / 0.7f); gfx_opacity_push(k); gfx_offset_push(0, 22 * (1 - k));
       text_draw(T("Sign in"), X, y, 76, 800, WHITE_A(255), -2.2f, W, ALIGN_START); y += 96;
       text_draw(T("Email and password"), X, y, F_BODY, 500, TXT2, 0, W, ALIGN_START); y += 84; gfx_offset_pop(); gfx_opacity_pop(); }
@@ -524,15 +530,31 @@ static void g_draw(void) {
         if (G.busy) spinner(x + w - 34 - 15, y + h / 2, 13); else icon_draw("ph_chev", x + w - 34 - 30, y + h / 2 - 15, 30, WHITE_A(ok ? 255 : 140));
         gfx_scale_pop(); hit_act(x, y, w, h, go_act, 0, 0); g_link(X, y + h + 12, T("Forgot password?"), F_SMALL, ALIGN_START, link_act, 1);
         if (G.err[0] && G.errF == 2) g_err_line(X, y + h + 24, W);
+        g_link(X + W, y + h + 12, T("Quick QR login"), F_SMALL, ALIGN_END, g_qr_act, 0);
       }
       gfx_offset_pop(); }
+
+  } else {
+    float cardW = fminf(W, 520), cardH = 390, cardX = (SB_W - cardW) / 2;
+    float cardY = clampf(y + 18, INS_T + 120, SB_H - INS_B - cardH - 88);
+    ph_glass(cardX, cardY, cardW, cardH, 28, RGBA(8, 8, 10, 190)); gfx_ring(cardX, cardY, cardW, cardH, 28, 1, WHITE_A(32));
+    text_draw(T("Quick QR login"), SB_W / 2, cardY + 34, F_H2, 800, TXT, 0, cardW - 40, ALIGN_CENTER);
+    text_draw(T("Scan this code with your phone"), SB_W / 2, cardY + 78, F_SMALL, 500, TXT2, 0, cardW - 40, ALIGN_CENTER);
+    float qs = 224, qx = SB_W / 2 - qs / 2, qy = cardY + 112;
+    if (login_qr_ready() && login_qr_link() && *login_qr_link()) { if (!qr_draw(login_qr_link(), qx, qy, qs, 18, 12)) text_draw(T("QR unavailable — use email"), SB_W / 2, qy + qs / 2, F_SMALL, 600, TXT2, 0, cardW - 40, ALIGN_CENTER); }
+    else spinner(SB_W / 2, qy + qs / 2, 20);
+    if (login_qr_code() && *login_qr_code()) text_draw(login_qr_code(), SB_W / 2, cardY + 346, F_BODY, 800, TXT, 1, cardW - 40, ALIGN_CENTER);
+    else if (login_qr_status() && *login_qr_status()) text_draw(login_qr_status(), SB_W / 2, cardY + 346, F_SMALL, 600, TXT2, 0, cardW - 40, ALIGN_CENTER);
+    g_link(SB_W / 2, cardY + cardH + 18, T("Use email and password"), F_SMALL, ALIGN_CENTER, g_qr_act, 0);
+  }
   gfx_opacity_pop();
 }
 static int g_key(int k) { char *f = G.field ? G.pass : G.email;
   if (SDL_IsTextInputActive() && ted_key(g_ed(), k)) return 1;
+  if (k == K_BACK && G.qrMode) { G.qrMode = 0; return 1; }
   if (k == K_BACK) { if (SDL_IsTextInputActive()) { if (f[0]) ted_backspace(g_ed()); else phone_keyboard(0); return 1; } app_quit(); return 1; }
   if (k == K_OK) { if (SDL_IsTextInputActive() && !G.field) { G.field = 1; return 1; } go_act(0, 0); return 1; } return 0; }
-Screen phLogin = { g_enter, NULL, g_key, NULL, g_draw, NULL, NULL, g_text, NULL };
+Screen phLogin = { g_enter, g_leave, g_key, g_tick, g_draw, NULL, NULL, g_text, NULL };
 
 /* ---- Search as a layer: it fades in over the page you are on, the keyboard comes up with it, Back fades it away ---- */
 static Tween sA; static int sOpen;
