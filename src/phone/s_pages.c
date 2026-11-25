@@ -202,16 +202,14 @@ static int dl_hold_ended(void) { return dlHoldFired == ph_last_press(); }
 static int dlInfo = -1; static Scroll dliV;
 /* words laid into a width, broken inside a word when one is longer than the line (file names): nothing runs out */
 static int wrap_lines(const char *t, float w, int size, int weight, char out[][300], int max) { int n = 0; char cur[300] = ""; const char *p = t;
-  while (*p && n < max) { const char *e = p; while (*e && *e != ' ' && *e != '
-') e++; char word[300]; snprintf(word, sizeof word, "%.*s", (int)(e - p), p);
+  while (*p && n < max) { const char *e = p; while (*e && *e != ' ' && *e != '\n') e++; char word[300]; snprintf(word, sizeof word, "%.*s", (int)(e - p), p);
     char tryb[600]; snprintf(tryb, sizeof tryb, "%s%s%s", cur, cur[0] ? " " : "", word);
     if (text_width(tryb, size, weight, 0) <= w) snprintf(cur, sizeof cur, "%s", tryb);
     else { if (cur[0]) { snprintf(out[n++], 300, "%s", cur); cur[0] = 0; if (n >= max) break; }
       while (text_width(word, size, weight, 0) > w && n < max) { int k = (int)strlen(word); while (k > 1) { char c2[300]; snprintf(c2, sizeof c2, "%.*s", k, word); if (text_width(c2, size, weight, 0) <= w) break; k--; } while (k > 1 && (word[k] & 0xC0) == 0x80) k--; /* (never inside a letter) */
         snprintf(out[n++], 300, "%.*s", k, word); memmove(word, word + k, strlen(word + k) + 1); }
       snprintf(cur, sizeof cur, "%s", word); }
-    p = e; if (*p == ' ') p++; else if (*p == '
-') { if (n < max) { snprintf(out[n++], 300, "%s", cur); cur[0] = 0; } p++; } }
+    p = e; if (*p == ' ') p++; else if (*p == '\n') { if (n < max) { snprintf(out[n++], 300, "%s", cur); cur[0] = 0; } p++; } }
   if (cur[0] && n < max) snprintf(out[n++], 300, "%s", cur); return n; }
 static float info_box(float x, float y, float w, const char *head, const char *body, int size, int weight, uint32_t col, int maxl, float lh) {
   static char L[40][300]; int n = wrap_lines(body, w - 48, size, weight, L, maxl < 40 ? maxl : 40); float h = (head ? 58 : 22) + n * lh + 20;
