@@ -20,7 +20,7 @@ for ABI in "${ABIS[@]}"; do
     *) echo "unknown ABI: $ABI" >&2; exit 1 ;;
   esac
   mkdir -p "$TC"
-  printf '#!/usr/bin/env bash\\nexec "%s/clang" --target=%s -fPIC "$@"\\n' "$NDK" "$TRIPLE" > "$TC/cc"
+  printf '#!/usr/bin/env bash\nexec "%s/clang" --target=%s -fPIC "$@"\n' "$NDK" "$TRIPLE" > "$TC/cc"
   chmod 755 "$TC/cc"
   B="$W/build-phone-prev2-$ABI"
   P="$W/prefix-phone-prev2-$ABI"
