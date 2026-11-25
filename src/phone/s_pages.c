@@ -161,7 +161,7 @@ static void sel_set(const Dl *d, int on) { char k[110]; sel_key(d, k, sizeof k);
 static int same_grp(const Dl *a, const Dl *b) {
   if (ph_dl_group_is_coll(a) || ph_dl_group_is_coll(b)) return ph_dl_group_is_coll(a) && ph_dl_group_is_coll(b) && !strcmp(a->group, b->group);
   if (!strcmp(a->type, "series") && !strcmp(b->type, "series")) {
-    if (a->id[0] && b->id[0]) return !strcmp(a->id, b->id);
+    if (a->id[0] && b->id[0] && !strcmp(a->id, b->id)) return 1;
     char an[256], bn[256]; series_norm(a->name, an, sizeof an); series_norm(b->name, bn, sizeof bn);
     return an[0] && !strcmp(an, bn);
   }
