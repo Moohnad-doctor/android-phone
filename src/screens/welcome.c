@@ -1063,12 +1063,9 @@ static int load(void) {
     nw->ic = icon_exists(nw->icn) ? nw->icn : "g_spark";
     if (nw->t[0]) W.nnews++; }
   snprintf(W.note, sizeof W.note, "%s", js_str(j, "note", ""));
-  const cJSON *s = js_obj(j, "support"); snprintf(W.url, sizeof W.url, "%s", js_str(s, "url", "")); snprintf(W.gh, sizeof W.gh, "%s", js_str(s, "github", ""));
-  { const char *g = W.gh; if (!strncmp(g, "https://", 8)) g += 8; snprintf(W.ghShown, sizeof W.ghShown, "%s", g); }
-  snprintf(W.stitle, sizeof W.stitle, "%s", js_str(s, "title", "")); snprintf(W.smsg, sizeof W.smsg, "%s", js_str(s, "message", ""));
+  /* Keep version notes local: do not load promotional copy or external support links into app information. */
+  W.url[0] = W.gh[0] = W.urlShown[0] = W.ghShown[0] = W.stitle[0] = W.smsg[0] = 0;
   cJSON_Delete(j);
-  const char *u = W.url; if (!strncmp(u, "https://", 8)) u += 8; else if (!strncmp(u, "http://", 7)) u += 7; if (!strncmp(u, "www.", 4)) u += 4;
-  snprintf(W.urlShown, sizeof W.urlShown, "%s", u);
   /* "1.0.0" reads as "1.0" */
   snprintf(W.short_ver, sizeof W.short_ver, "%s", W.ver); size_t L = strlen(W.short_ver);
   if (L > 2 && !strcmp(W.short_ver + L - 2, ".0") && strchr(W.short_ver, '.') != W.short_ver + L - 2) W.short_ver[L - 2] = 0;
@@ -1120,11 +1117,7 @@ void welcome_open_now(void) {
   W.in.on = 0; W.fromSignIn = 1; /* already in: the loading fades off it, its glows carrying on */
 }
 void welcome_show_guide(void) { if (W.open && !W.closing) return; load(); W.checked = 1; open_guide(1); }
-const char *welcome_support_url(void) { if (!W.url[0]) load(); return W.url; }
+const char *welcome_support_url(void) { return ""; }
 void welcome_show_whatsnew(void) { if ((W.open && !W.closing) || !load()) return; W.checked = 1; open_guide(0); } /* Settings > About: the version's page again */
-const char *welcome_github_url(void) { if (!W.url[0]) load();
-#ifdef SB_PHONE
-  if (W.gh[0] && strstr(W.gh, "github.com/stremio-origin/")) return "https://github.com/stremio-origin/android-phone"; /* (a phone: its own repository, not the TV's) */
-#endif
-  return W.gh; }
+const char *welcome_github_url(void) { return ""; }
 
