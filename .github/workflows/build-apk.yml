@@ -16,7 +16,7 @@ concurrency:
 jobs:
   build:
     # The native build script currently selects the NDK's darwin-x86_64 toolchain.
-    # Rosetta lets that toolchain run on the macOS hosted runner without patching project scripts.
+    # An Intel runner matches that toolchain architecture without patching project scripts.
     runs-on: macos-15-intel
     timeout-minutes: 120
 
