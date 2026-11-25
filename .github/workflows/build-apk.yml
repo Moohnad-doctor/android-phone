@@ -50,7 +50,7 @@ jobs:
         run: |
           set -euo pipefail
           PRIV="$HOME/stremiobrew-build"
-          mkdir -p "$PRIV/android" "$PRIV/src"
+          mkdir -p "$PRIV/android" "$PRIV/src/SDL2-2.30.12"
           ln -sfn "$ANDROID_HOME" "$PRIV/android/sdk"
 
           curl -fL --retry 3 \
@@ -69,7 +69,7 @@ jobs:
             https://github.com/libsdl-org/SDL/releases/download/release-2.30.12/SDL2-2.30.12.tar.gz \
             -o "$RUNNER_TEMP/SDL2-2.30.12.tar.gz"
           tar -xzf "$RUNNER_TEMP/SDL2-2.30.12.tar.gz" \
-            --strip-components=1 -C "$PRIV/linux/SDL2-2.30.12"
+            --strip-components=1 -C "$PRIV/src/SDL2-2.30.12"
 
           echo "NDK=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=$PRIV/android/sdk" >> "$GITHUB_ENV"
