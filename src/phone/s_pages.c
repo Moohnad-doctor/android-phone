@@ -87,7 +87,7 @@ static void lib_tick(float dt) { timer_tick(&L.sw, dt); if (L.lib != lib_version
 static void lib_draw(void) {
   if (!L.all || L.lib != lib_version()) lib_build(); /* (drawn before it is entered: a page swiped in shows its titles, not an empty grid that fills on landing) */
   ph_drag(0, 0, SB_W, SB_H - INS_B - BAR_H, &L.v, 1); scroll_tick(&L.v);
-  float y = INS_T + 200 - L.v.pos; /* (under the header) */
+  float topBase = phone_free_top(); float y = topBase + 175 - L.v.pos; /* (under the header) */
   float sk = L.sw.on ? ease_apply(EASE_OUT, timer_x(&L.sw)) : 1; gfx_opacity_push(0.2f + 0.8f * sk); gfx_offset_push(110 * L.swDir * (1 - sk), L.swDir ? 0 : 30 * (1 - sk));
   if (0) {}
   else if (!sb_signed_in()) text_draw_wrapped(T("Sign in to keep your Library and where you stopped, the same as on your TV."), PAD, y + 20, SB_W - 2 * PAD, 4, F_BODY, 500, TXT2, 0, ALIGN_START, 34);
@@ -97,13 +97,13 @@ static void lib_draw(void) {
   L.v.max = y + L.v.pos - (SB_H - INS_B - BAR_H - ctx_room()) + 30;
   /* the header: the name large in the middle, under it a pill with how many and the order (a tap changes the order);
      scrolled, it gathers into a slim bar of glass with the name alone */
-  { float k = clampf(L.v.pos / 140, 0, 1); k = k * k * (3 - 2 * k); float hh = INS_T + 190 - 100 * k;
+  { float k = clampf(L.v.pos / 140, 0, 1); k = k * k * (3 - 2 * k); float hh = topBase + 140 - 100 * k;
     phone_top_glass(hh, k); if (k > 0.01f) gfx_rrect_v(0, hh, SB_W, 70, 0, col_alpha(PAGE | 0xff000000u, 0.55f * k), col_alpha(PAGE | 0xff000000u, 0)); /* the glass melts into the posters, no edge */
-    float ty = INS_T + 30 - 14 * k, px = F_H1 + 10 - (F_H1 + 10 - F_H2) * k;
+    float ty = topBase + 30 - 14 * k, px = F_H1 + 10 - (F_H1 + 10 - F_H2) * k;
     { float mw = SB_W - 2 * (PAD + 60 + 16); float fp = ph_fit_px(T("Library"), px, 900, -1.0f + 0.6f * k, mw); text_draw(T("Library"), SB_W / 2, ty + (text_line_height((int)px) - text_line_height((int)fp)) / 2.0f, (int)fp, 900, TXT, -1.0f + 0.6f * k, mw, ALIGN_CENTER); } /* (clear of the order button beside it, in every language) */
     /* the order: a pill with the count under the name; scrolled, it gathers into a round button at the top right */
     char n[16], line[120]; snprintf(n, sizeof n, "%d", L.counts[0]); snprintf(line, sizeof line, "%s  \xc2\xb7  %s", T1("{n} titles", "n", n), T(LS_LB[lib_sort_key()]));
-    float tw = text_width(line, F_SMALL, 700, 0), w0 = tw + 76, h0 = 54, x0 = SB_W / 2 - w0 / 2, y0 = INS_T + 108;
+    float tw = text_width(line, F_SMALL, 700, 0), w0 = tw + 76, h0 = 54, x0 = SB_W / 2 - w0 / 2, y0 = topBase + 108;
     float d = 60, x1 = SB_W - PAD - d, y1 = ty + text_line_height((int)px) / 2.0f - d / 2;
     float w = w0 + (d - w0) * k, h = h0 + (d - h0) * k, x = x0 + (x1 - x0) * k, py = y0 + (y1 - y0) * k;
     float pk = press_k(x, py, w, h), sc = 1 - 0.05f * pk; gfx_scale_push(sc, sc, x + w / 2, py + h / 2);
@@ -324,7 +324,7 @@ static void dl_draw(void) {
   for (int i = 0; i < nDR; i++) DR[i].live = 0;
   ph_drag(0, 0, SB_W, SB_H - INS_B - BAR_H, &dlV, 1); scroll_tick(&dlV);
   phone_col_push(1100); /* (sideways, a tablet: a readable width, in the middle) */
-  float y = INS_T + 150 - dlV.pos; int n = ph_dl_count(); if (!n && selMode) selMode = 0;
+  float topBase = phone_free_top(), y = topBase + 130 - dlV.pos; int n = ph_dl_count(); if (!n && selMode) selMode = 0;
   { /* the first visit: what can be done with a download, shown once (gone on "Got it", or once a download is held or swiped) */
     static Tween tipT; int show = n && !store_bool("dlTipSeen", 0); static int seenT; if (!seenT) { seenT = 1; tween_set(&tipT, show); } tween_to(&tipT, show ? 1 : 0, 0.35f, EASE_WEB); tween_tick(&tipT, phDt);
     if (tipT.v > 0.01f) { float th = 236, k = tipT.v, x = PAD, w = SB_W - 2 * PAD, ty = y - 6; gfx_clip_push(0, ty - 4, SB_W, th * k + 4); gfx_opacity_push(k);
@@ -338,7 +338,7 @@ static void dl_draw(void) {
       text_draw(T("Hold one to see its stream"), mx + mw + 22, hy + 28 - text_line_height(F_SMALL + 1) / 2.0f, F_SMALL + 1, 700, TXT, 0, w - mw - 70, ALIGN_START);
       { const char *gl = T("Got it"); float gw = text_width(gl, F_SMALL, 800, 0) + 44, gx = x + w - 20 - gw, gy = ty + th - 20 - 54; gfx_rrect(gx, gy, gw, 54, 27, WHITE_A(235)); text_draw(gl, gx + gw / 2, gy + 27 - text_line_height(F_SMALL) / 2.0f, F_SMALL, 800, RGB(14, 12, 20), 0, 0, ALIGN_CENTER); if (k > 0.9f) hit_act(gx - 8, gy - 8, gw + 16, 70, tip_ok, 0, 0); }
       gfx_opacity_pop(); gfx_clip_pop(); y += (th + 18) * k; } }
-  if (!n) { float cy = INS_T + 88 + (SB_H - INS_T - 88 - INS_B - BAR_H) * 0.38f - dlV.pos;
+  if (!n) { float cy = topBase + 70 + (SB_H - topBase - 70 - INS_B - BAR_H) * 0.38f - dlV.pos;
     { float t = (float)app_now(), bob = sinf(t * 2.2f) * 8, pul = 1 + 0.04f * sinf(t * 2.2f + 1); gfx_circle(SB_W / 2, cy, 84 * pul, col_alpha(ACC, 0.22f)); gfx_ring(SB_W / 2 - 84 * pul, cy - 84 * pul, 168 * pul, 168 * pul, 84 * pul, 1.5f, col_alpha(ACC2 | 0xff000000u, 0.4f)); icon_draw("ph_down", SB_W / 2 - 42, cy - 42 + bob, 84, ACC3); }
     text_draw(T("Nothing downloaded yet"), SB_W / 2, cy + 128, F_H2 - 2, 800, TXT, -0.2f, SB_W - 2 * PAD, ALIGN_CENTER);
     text_draw_wrapped(T("Use Download on a film or an episode: it plays here without a connection."), SB_W / 2, cy + 190, SB_W - 2 * PAD - 40, 4, F_BODY, 500, TXT2, 0, ALIGN_CENTER, 34); y = cy + 300; }
@@ -348,9 +348,9 @@ static void dl_draw(void) {
     y += dl_card(i, y, ink); n = ph_dl_count(); }
   tween_to(&selT, selMode ? 1 : 0, 0.3f, EASE_WEB); tween_tick(&selT, phDt);
   dlV.max = y + dlV.pos - (SB_H - INS_B - BAR_H) + 20 + 120 * selT.v; if (dlV.max < 0) dlV.max = 0;
-  { float k = clampf(dlV.pos / 140, 0, 1); k = k * k * (3 - 2 * k); phone_top_glass(INS_T + 150 - 60 * k, k); float px = F_H1 + 10 - (F_H1 + 10 - F_H2) * k, cy = INS_T + 34 - 18 * k + text_line_height((int)px) / 2.0f;
+  { float k = clampf(dlV.pos / 140, 0, 1); k = k * k * (3 - 2 * k); phone_top_glass(topBase + 120 - 60 * k, k); float px = F_H1 + 10 - (F_H1 + 10 - F_H2) * k, cy = topBase + 28 - 18 * k + text_line_height((int)px) / 2.0f;
     { float sw = n ? text_width(selMode ? T("Done") : T("Select"), F_SMALL, 700, 0) + 40 : 0, side = (sw > 72 ? sw : 72) + 16, mw = SB_W - 2 * (PAD + side); float fp = ph_fit_px(T("Downloads"), px, 900, -1.0f + 0.6f * k, mw); /* (between Select and its settings, in every language) */
-      text_draw(T("Downloads"), SB_W / 2, INS_T + 34 - 18 * k + (text_line_height((int)px) - text_line_height((int)fp)) / 2.0f, (int)fp, 900, TXT, -1.0f + 0.6f * k, mw, ALIGN_CENTER); }
+      text_draw(T("Downloads"), SB_W / 2, topBase + 28 - 18 * k + (text_line_height((int)px) - text_line_height((int)fp)) / 2.0f, (int)fp, 900, TXT, -1.0f + 0.6f * k, mw, ALIGN_CENTER); }
     { float r = 36, cx = SB_W - PAD - r, pk = press_k(cx - r, cy - r, 2 * r, 2 * r), sc = 1 - 0.08f * pk; /* its settings, beside its name */
       gfx_scale_push(sc, sc, cx, cy); ph_glass(cx - r, cy - r, 2 * r, 2 * r, r, RGBA(16, 14, 22, 92)); gfx_ring(cx - r, cy - r, 2 * r, 2 * r, r, 1, WHITE_A(30)); icon_draw("ph_sliders", cx - 20, cy - 20, 40, WHITE_A(230)); gfx_scale_pop();
       hit_act(cx - r - 8, cy - r - 8, 2 * r + 16, 2 * r + 16, dl_settings_act, 0, 0); }
@@ -420,7 +420,7 @@ static void q_tick(float dt) { (void)dt; if (!Q.sugAsked && Q.q[0] && app_now() 
 static void so_key_back(void);
 static void close_act(int a, int b) { (void)a; (void)b; so_key_back(); }
 static void q_draw(void) {
-  float fieldY = INS_T + 122, top = fieldY + 104; /* the field rides on the keyboard */
+  float fieldY = phone_free_top() + 12, top = fieldY + 104; /* the field rides on the keyboard */
   float searchBottom = SB_H - (KB_H > INS_B ? KB_H : INS_B); ph_drag(0, top, SB_W, searchBottom - top, &Q.v, 1); scroll_tick(&Q.v);
   float y = top + 10 - Q.v.pos;
   for (int i = 0; i < Q.nd; i++) if (Q.res[i].n > 0) { char t[200]; snprintf(t, sizeof t, "%s", Q.defs[i].title); for (char *c = t; *c; c++) if (*c != ' ' && *c != '.' && (unsigned char)*c != 0xc2 && (unsigned char)*c != 0xb7 && *c != '-') { text_draw(t, PAD, y, F_H2 - 2, 800, TXT, -0.3f, SB_W - 2 * PAD, ALIGN_START); y += 52; break; } /* no heading when it has no words */ y += poster_grid(&Q.res[i], y, q_focus, i, Q.fr == i ? Q.fi : -1) + 20; }
