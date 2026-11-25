@@ -17,7 +17,7 @@ jobs:
   build:
     # The native build script currently selects the NDK's darwin-x86_64 toolchain.
     # Rosetta lets that toolchain run on the macOS hosted runner without patching project scripts.
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 120
 
     steps:
@@ -35,7 +35,6 @@ jobs:
 
       - name: Install native build tools
         run: |
-          softwareupdate --install-rosetta --agree-to-license
           brew install cmake ninja
 
       - name: Install Android SDK and NDK packages
