@@ -283,8 +283,7 @@ static void apply_download_settings(void) {
     { "num_want",                     { 100,  200,  300 } },
     { "max_queued_disk_bytes",        { 1048576, 2097152, 4194304 } },
     { "max_allowed_in_request_queue", { 128,  500, 1000 } },
-    { "unchoke_slots_limit",          {   6,   10,   16 } },
-    { "active_downloads",             {   4,    8,   16 } }
+    { "unchoke_slots_limit",          {   6,   10,   16 } }
   };
   for (unsigned i = 0; i < sizeof D / sizeof *D; i++) E->setting(D[i].n, D[i].v[PF.tier]);
 }
