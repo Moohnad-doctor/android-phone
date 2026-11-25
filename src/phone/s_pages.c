@@ -167,14 +167,16 @@ static int dl_hold_ended(void) { return dlHoldFired == ph_last_press(); }
 static int dlInfo = -1; static Scroll dliV;
 /* words laid into a width, broken inside a word when one is longer than the line (file names): nothing runs out */
 static int wrap_lines(const char *t, float w, int size, int weight, char out[][300], int max) { int n = 0; char cur[300] = ""; const char *p = t;
-  while (*p && n < max) { const char *e = p; while (*e && *e != ' ' && *e != '\n') e++; char word[300]; snprintf(word, sizeof word, "%.*s", (int)(e - p), p);
+  while (*p && n < max) { const char *e = p; while (*e && *e != ' ' && *e != '
+') e++; char word[300]; snprintf(word, sizeof word, "%.*s", (int)(e - p), p);
     char tryb[600]; snprintf(tryb, sizeof tryb, "%s%s%s", cur, cur[0] ? " " : "", word);
     if (text_width(tryb, size, weight, 0) <= w) snprintf(cur, sizeof cur, "%s", tryb);
     else { if (cur[0]) { snprintf(out[n++], 300, "%s", cur); cur[0] = 0; if (n >= max) break; }
       while (text_width(word, size, weight, 0) > w && n < max) { int k = (int)strlen(word); while (k > 1) { char c2[300]; snprintf(c2, sizeof c2, "%.*s", k, word); if (text_width(c2, size, weight, 0) <= w) break; k--; } while (k > 1 && (word[k] & 0xC0) == 0x80) k--; /* (never inside a letter) */
         snprintf(out[n++], 300, "%.*s", k, word); memmove(word, word + k, strlen(word + k) + 1); }
       snprintf(cur, sizeof cur, "%s", word); }
-    p = e; if (*p == ' ') p++; else if (*p == '\n') { if (n < max) { snprintf(out[n++], 300, "%s", cur); cur[0] = 0; } p++; } }
+    p = e; if (*p == ' ') p++; else if (*p == '
+') { if (n < max) { snprintf(out[n++], 300, "%s", cur); cur[0] = 0; } p++; } }
   if (cur[0] && n < max) snprintf(out[n++], 300, "%s", cur); return n; }
 static float info_box(float x, float y, float w, const char *head, const char *body, int size, int weight, uint32_t col, int maxl, float lh) {
   static char L[40][300]; int n = wrap_lines(body, w - 48, size, weight, L, maxl < 40 ? maxl : 40); float h = (head ? 58 : 22) + n * lh + 20;
@@ -187,9 +189,12 @@ static void dli_draw(float a) { const Dl *d = ph_dl_get(dlInfo); if (!d) { ph_sh
   int nl = text_draw_wrapped(d->name, PAD, y, cw, 2, F_H2, 800, TXT, -0.3f, ALIGN_START, 44); y += nl * 44 + 4;
   { char st[200]; char sz[32] = ""; if (d->size > 0) bytes_s((double)d->size, sz, sizeof sz); snprintf(st, sizeof st, "%s%s%s%s%s", d->ep, d->ep[0] ? "  \xc2\xb7  " : "", st_word(d->state), sz[0] ? "  \xc2\xb7  " : "", sz); text_draw(st, PAD, y, F_SMALL, 600, TXT2, 0, cw, ALIGN_START); y += 50; }
   if (!d->info[0]) { y += info_box(PAD, y, cw, NULL, T("No details kept for this download."), F_SMALL, 500, TXT2, 3, 32) + 14; }
-  else { const char *p = d->info, *e1 = strchr(p, '\n'); char addon[200], rest[900]; snprintf(addon, sizeof addon, "%.*s", e1 ? (int)(e1 - p) : (int)strlen(p), p); p = e1 ? e1 + 1 : p + strlen(p);
-    const char *e2 = strchr(p, '\n'); char name[400]; snprintf(name, sizeof name, "%.*s", e2 ? (int)(e2 - p) : (int)strlen(p), p); p = e2 ? e2 + 1 : p + strlen(p); snprintf(rest, sizeof rest, "%s", p);
-    char *fl = strrchr(rest, '\n'); char file[300] = ""; if (fl && d->file[0] == 0) { snprintf(file, sizeof file, "%s", fl + 1); }
+  else { const char *p = d->info, *e1 = strchr(p, '
+'); char addon[200], rest[900]; snprintf(addon, sizeof addon, "%.*s", e1 ? (int)(e1 - p) : (int)strlen(p), p); p = e1 ? e1 + 1 : p + strlen(p);
+    const char *e2 = strchr(p, '
+'); char name[400]; snprintf(name, sizeof name, "%.*s", e2 ? (int)(e2 - p) : (int)strlen(p), p); p = e2 ? e2 + 1 : p + strlen(p); snprintf(rest, sizeof rest, "%s", p);
+    char *fl = strrchr(rest, '
+'); char file[300] = ""; if (fl && d->file[0] == 0) { snprintf(file, sizeof file, "%s", fl + 1); }
     if (name[0]) y += info_box(PAD, y, cw, addon[0] ? addon : NULL, name, F_BODY, 700, TXT, 6, 36) + 14;
     if (rest[0]) y += info_box(PAD, y, cw, T("DETAILS"), rest, F_SMALL, 500, WHITE_A(210), 30, 32) + 14; }
   if (d->file[0]) { const char *fn = strrchr(d->file, '/'); y += info_box(PAD, y, cw, T("FILE"), fn ? fn + 1 : d->file, F_SMALL, 500, TXT2, 6, 32) + 14; }
@@ -251,7 +256,9 @@ static float dl_card(int i, float y, float ink) {
     tween_to(&R->sel, selMode ? 1 : 0, 0.3f, EASE_WEB); tween_tick(&R->sel, phDt); float sk = R->sel.v, inset = 64 * sk; /* Select: a round tick slides in on the left */
     int picked = grp ? grp_all_sel(d) : is_sel(d);
     float sx = swipe(R, x, y, w, h); swipe_under(R, x, y, w, h + extra, sx, 24); gfx_offset_push(-sx, 0); { float lk = 1 - 0.015f * R->lift.v; gfx_scale_push(lk, lk, x + w / 2, y + h / 2); } if (R->lift.v > 0.01f) gfx_shadow(x, y + 8 * R->lift.v, w, h, 24, 24 * R->lift.v, BLACK_A((int)(110 * R->lift.v))); /* taken: it lifts a little off the page */
-    gfx_rrect(x, y, w, h + extra, 24, SURF);\n    if (d->bg[0]) { GLuint backdrop = img_get_shaped(d->bg, (int)w, (int)h, 24, 2); if (backdrop) { gfx_image(backdrop, x, y, w, h, 0, WHITE_A(105), 0, 1, 1, 0); gfx_rrect_v(x, y, w, h, 24, BLACK_A(105), BLACK_A(205)); } }\n    gfx_ring(x, y, w, h + extra, 24, 1, picked && selMode ? col_alpha(ACC2 | 0xff000000u, 0.9f) : WHITE_A(12));
+    gfx_rrect(x, y, w, h + extra, 24, SURF);
+    if (d->bg[0]) { GLuint backdrop = img_get_shaped(d->bg, (int)w, (int)h, 24, 2); if (backdrop) { gfx_image(backdrop, x, y, w, h, 0, WHITE_A(105), 0, 1, 1, 0); gfx_rrect_v(x, y, w, h, 24, BLACK_A(105), BLACK_A(205)); } }
+    gfx_ring(x, y, w, h + extra, 24, 1, picked && selMode ? col_alpha(ACC2 | 0xff000000u, 0.9f) : WHITE_A(12));
     float pk = press_k(x, y, w, h); if (pk > 0 && sx < 2) gfx_rrect(x, y, w, h, 24, WHITE_A((int)(14 * pk)));
     if (sk > 0.01f) { float cx = x + 20 + 22 * sk, cy = y + h / 2; gfx_opacity_push(sk); gfx_ring(cx - 16, cy - 16, 32, 32, 16, 2, picked ? ACC2 : WHITE_A(110)); if (picked) { gfx_circle(cx, cy, 16, ACC2 | 0xff000000u); icon_draw("ph_check", cx - 12, cy - 12, 24, RGB(14, 12, 20)); } gfx_opacity_pop(); }
     float pw = 120, ph = 180, px = x + 15 + inset; int cg = grp && ph_dl_group_is_coll(d); const char *pst = d->poster; /* (a collection: its own poster and name, its films under it) */
@@ -279,7 +286,10 @@ static float dl_card(int i, float y, float ink) {
       else if (!warm) { float pz = R->paused.v; gfx_circle(bx, by, 36, WHITE_A(20)); gfx_opacity_push(1 - pz); icon_draw("p_pause", bx - 18, by - 18, 36, WHITE_A(235)); gfx_opacity_pop(); gfx_opacity_push(pz); icon_draw(st == DL_FAILED || st == DL_NOSTREAM ? "restart" : "play", bx - 18, by - 18, 36, WHITE_A(235)); gfx_opacity_pop(); } }
     if (sx < 2) { int two = !grp && st != DL_DONE && !warm && d->url[0] && st != DL_FAILED && st != DL_NOSTREAM; hit_act(x, y, w - (grp ? 90 : two ? 170 : 0), h, grp ? grp_tap : dl_tap, i, 0); /* (its own two buttons on the right while it comes; else all of it plays) */ if (!grp && dl_held(x, y, w, h)) dl_info_open(i); }
     /* its episodes */
-    if (ok > 0.004f) { float ry = y + h; int r = 0, order[64], no = 0;\n      for (int j = 0; j < n && no < 64; j++) if (same_grp(ph_dl_get(j), d)) order[no++] = j;\n      for (int a = 1; a < no; a++) { int v = order[a], vs = 0, ve = 0; const char *vp = strchr(ph_dl_get(v)->vid, ':'); if (vp) sscanf(vp + 1, "%d:%d", &vs, &ve); int b = a; while (b > 0) { int ps = 0, pe = 0; const char *pp = strchr(ph_dl_get(order[b - 1])->vid, ':'); if (pp) sscanf(pp + 1, "%d:%d", &ps, &pe); if (ps < vs || (ps == vs && pe <= ve)) break; order[b] = order[b - 1]; b--; } order[b] = v; }\n      for (int oi = 0; oi < no; oi++) { int j = order[oi]; const Dl *o = ph_dl_get(j);
+    if (ok > 0.004f) { float ry = y + h; int r = 0, order[64], no = 0;
+      for (int j = 0; j < n && no < 64; j++) if (same_grp(ph_dl_get(j), d)) order[no++] = j;
+      for (int a = 1; a < no; a++) { int v = order[a], vs = 0, ve = 0; const char *vp = strchr(ph_dl_get(v)->vid, ':'); if (vp) sscanf(vp + 1, "%d:%d", &vs, &ve); int b = a; while (b > 0) { int ps = 0, pe = 0; const char *pp = strchr(ph_dl_get(order[b - 1])->vid, ':'); if (pp) sscanf(pp + 1, "%d:%d", &ps, &pe); if (ps < vs || (ps == vs && pe <= ve)) break; order[b] = order[b - 1]; b--; } order[b] = v; }
+      for (int oi = 0; oi < no; oi++) { int j = order[oi]; const Dl *o = ph_dl_get(j);
         float rk = clampf(ok * 1.5f - r * 0.1f, 0, 1); rk = 1 - (1 - rk) * (1 - rk); r++; DlRow *E = dr(o->vid); E->nconns = o->conns; dr_read(E, o->state == DL_DONE ? o->size : o->got, o->size, o->state == DL_RUNNING ? o->speed : 0, 0);
         float colk = E->gone ? clampf((float)((app_now() - E->goneAt - 0.16) / 0.26), 0, 1) : 0; colk = colk * colk * (3 - 2 * colk); /* gone off the side: its room folds shut, the rows below glide up */
         gfx_opacity_push(rk * (1 - colk)); gfx_offset_push(0, (1 - rk) * -14); float rx = x + 8, rw = w - 16, rh = (rowH - 8) * (1 - colk); gfx_clip_push(rx - 2, ry, rw + 4, rh + 2);
