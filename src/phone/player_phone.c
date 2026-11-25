@@ -656,7 +656,7 @@ void phone_player_draw(void) {
         char n[8]; snprintf(n, sizeof n, "%d", seek_step()); text_draw(n, bx, cy - text_line_height(6) / 2.0f + 1.65f,6, 800, WHITE_A(240), 0, 0, ALIGN_CENTER); } /* the step, inside the arrow */
       gfx_scale_pop();
       float la = btnDir == sd ? clampf((float)(1.1 - (app_now() - btnAt)) / 0.3f, 0, 1) : 0; /* how far, over the button, for a moment */
-      if (la > 0) { char t[16]; snprintf(t, sizeof t, "%s%d s", sd < 0 ? "\xe2\x88\x92" : "+", seek_step() * btnJumps); gfx_opacity_push(la); text_draw(t, bx, cy - 35.2f - 29.7f - 5.5f * (1 - clampf(btnA.v * 2, 0, 1)), 17.6f, 800, WHITE_A(250), 0, 0, ALIGN_CENTER); gfx_opacity_pop(); } }
+      if (la > 0) { char t[16]; snprintf(t, sizeof t, "%s%d s", sd < 0 ? "\xe2\x88\x92" : "+", seek_step() * btnJumps); gfx_opacity_push(la); text_draw(t, bx, cy - 35.2f - 29.7f - 5.5f * (1 - clampf(btnA.v * 2, 0, 1)), 18, 800, WHITE_A(250), 0, 0, ALIGN_CENTER); gfx_opacity_pop(); } }
     { int h0 = nhit; gfx_opacity_push(1 - waitA.v); hud_circle(cx, cy, 47, play ? "p_pause" : "p_play", 0, a_play, 0); gfx_opacity_pop(); if (waitA.v > 0.5f) nhit = h0; } /* a wait takes the play button's place */
     gfx_scale_pop(); gfx_opacity_pop(); if (midA.v < 0.5f) nhit = midHits; /* hidden: not tappable either */
     /* the bottom: slides down as it goes */
@@ -771,6 +771,9 @@ extern int player_ready_seen(const char *vid); extern void player_ready_mark(con
 static int ready_hidden(int pc) { static double scrubAt = -1; static int done; if (scrubAt != seekStartAt) { scrubAt = seekStartAt; done = pc >= 100 && player_ready_seen(player_vid()); } if (pc >= 100 && !done) player_ready_mark(player_vid()); return done; }
 static void prev_badge(float cx, float y, float a) { int pc = sp_progress(); if (pc >= 100 && ready_hidden(pc)) return; if (pc >= 0 && pc >= 90) a *= clampf(1 - (float)(app_now() - seekStartAt - 3.1) / 0.6f, 0, 1); if (pc < 0 || a <= 0.01f) return; char t[48]; if (pc >= 100) snprintf(t, sizeof t, "%s", T("Previews ready")); else { char n[8]; snprintf(n, sizeof n, "%d", pc); snprintf(t, sizeof t, "%s", T1("Previews {n}%", "n", n)); } /* (how much of the film has its pictures, while seeking) */
   float w = text_width(t, 22, 700, 0) + 28, h = 36, x = clampf(cx - w / 2, 20, SB_W - 20 - w); gfx_opacity_push(a); gfx_rrect(x, y, w, h, h / 2, BLACK_A(140)); if (pc < 100) gfx_rrect(x, y + h - 3, w * pc / 100.0f, 3, 1.5f, ACC2 | 0xff000000u); text_draw(t, x + w / 2, y + h / 2 - text_line_height(22) / 2.0f, 22, 700, WHITE_A(pc >= 100 ? 200 : 235), 0, 0, ALIGN_CENTER); gfx_opacity_pop(); }
+static void prev_pic(double t, float cx, float bottom, float a) { SpPic p; if (a <= 0.01f || !sp_get(t, &p)) { prev_badge(cx, bottom - 50, a); return; } float w = SB_W > SB_H ? 420 : 360, h = w * p.h / p.w, x = clampf(cx - w / 2, 20, SB_W - 20 - w), y = bottom - h - 14;
+  int under = 0; if (y < 20) { y = bottom + 120 + 14; under = 1; } /* (no room above, the slide's bubble near the top: under it) */
+  gfx_opacity_push(a); gfx_shadow(x, y + 10, w, h, 16, 34, BLACK_A(150)); gfx_image(p.tex, x, y, w, h, 16, WHITE_A(255), 0, p.v0, p.u1, p.v1); gfx_ring(x, y, w, h, 16, 1, WHITE_A(26)); gfx_opacity_pop(); prev_badge(x + w / 2, under ? y + h + 10 : y - 44, a); } /* (the same brightness whether it is the exact picture or the nearest: no flicker as the finger moves; a hairline edge, a soft shadow) */
 /* seeking with previews: the controls step back, the picture in the middle of the screen, its neighbours either side
    smaller and fainter, the time under it (and how far from where it was, sliding); the same for the bar and the slide.
    0: no picture yet (the plain bubble stays) */
