@@ -27,7 +27,7 @@
 #define NK 36
 #define SCOLS 6
 #define SMAX 24
-#define NCAT 16
+#define NCAT 64
 #define SGC 4
 #define SROWH 456.0f   /* the scroll step per row (the web's; its rows lie 420 apart) */
 #define SPITCH 420.0f  /* a poster (354) and the space under it (66) */
@@ -156,7 +156,7 @@ static void cat_go(void) {
     for (int i = 0; i < 2; i++) { memset(&defs[n], 0, sizeof defs[n]); snprintf(defs[n].type, sizeof defs[n].type, "%s", ty[i]); snprintf(defs[n].url, sizeof defs[n].url, CINEMETA "/catalog/%s/top/search=%s.json", ty[i], enc); n++; } }
   for (int c = 0; c < S.ncat; c++) itemlist_clear(&S.cat[c]); S.ncat = n; for (int c = 0; c < n; c++) S.catDone[c] = S.catFail[c] = 0;
   fprintf(stderr, "[search] a query of %d character(s) in %d catalog(s)\n", (int)strlen(p), n); /* (never the words typed: the log may be shared) */
-  for (int c = 0; c < n; c++) sb_catalog_url(defs[c].url, defs[c].type, 20, on_cat, (void *)(uintptr_t)(((uintptr_t)(S.tok & 0x7ffffff) << 5) | (uintptr_t)c));
+  for (int c = 0; c < n; c++) sb_catalog_url(defs[c].url, defs[c].type, 20, on_cat, (void *)(uintptr_t)(((uintptr_t)(S.tok & 0x3ffffff) << 6) | (uintptr_t)c));
 }
 /* the QR for typing on the phone, and what arrives from it (asked only while Search is up) */
 static void phone_ask(void) { if (S.qrOk) { httpd_start(); return; } S.qrAt = app_now(); S.qrOk = httpd_url("", S.qrUrl, sizeof S.qrUrl); }
