@@ -573,6 +573,7 @@ static void s_leave(void) { direct = 0; }
 int ph_settings_direct(void) { return direct; }
 Screen phSet = { s_enter, s_leave, s_key, NULL, s_draw, NULL, NULL, NULL, NULL, phSet_out };
 void ph_settings_open_about(void) { app_go(SCR_SET, NULL, 0); S.page = P_ABOUT; }
+static void news_act(int a, int b) { (void)a; (void)b; void ph_whatsnew_show(void); ph_whatsnew_show(); }
 void ph_settings_dev(const char *a) { ph_settings_open_about(); if (!strcmp(a, ":logs")) logs_act(0, 0); else if (!strcmp(a, ":check")) check_act(0, 0); else if (!strcmp(a, ":news")) news_act(0, 0); } /* (development: SB_OPEN="about", "about:logs", "about:check") */
 void settings_open_about(void) { ph_settings_open_about(); }
 void settings_open_usb(void) { app_go(SCR_SET, NULL, 0); }
