@@ -1,4 +1,4 @@
-name: Build Android APKs
+name: Build Android APK
 
 on:
   workflow_dispatch:
@@ -15,9 +15,7 @@ concurrency:
 
 jobs:
   build:
-    # The native build script currently selects the NDK's darwin-x86_64 toolchain.
-    # An Intel runner matches that toolchain architecture without patching project scripts.
-    runs-on: macos-15-intel
+    runs-on: ubuntu-latest
     timeout-minutes: 120
 
     steps:
@@ -30,12 +28,13 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK tools
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Install native build tools
         run: |
-          brew install cmake ninja
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build build-essential curl unzip
 
       - name: Install Android SDK and NDK packages
         run: |
@@ -46,22 +45,20 @@ jobs:
             "build-tools;36.0.0" \
             "ndk;27.2.12479018"
 
-      - name: Prepare the build toolchain layout
+      - name: Prepare the build toolchain
         shell: bash
         run: |
           set -euo pipefail
           PRIV="$HOME/stremiobrew-build"
-          mkdir -p "$PRIV/android" "$PRIV/src" "$PRIV/mac"
-
-          # apk.sh expects the SDK and Gradle in these project-specific locations.
+          mkdir -p "$PRIV/android" "$PRIV/src/SDL2-2.30.12"
           ln -sfn "$ANDROID_HOME" "$PRIV/android/sdk"
+
           curl -fL --retry 3 \
             https://services.gradle.org/distributions/gradle-8.11.1-bin.zip \
             -o "$RUNNER_TEMP/gradle-8.11.1-bin.zip"
           unzip -q "$RUNNER_TEMP/gradle-8.11.1-bin.zip" -d "$PRIV/android"
           test -x "$PRIV/android/gradle-8.11.1/bin/gradle"
 
-          # build-deps.sh consumes these pinned source archives from its documented private build directory.
           curl -fL --retry 3 \
             https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.2/mbedtls-3.6.2.tar.bz2 \
             -o "$PRIV/src/mbedtls-3.6.2.tar.bz2"
@@ -71,11 +68,10 @@ jobs:
           curl -fL --retry 3 \
             https://github.com/libsdl-org/SDL/releases/download/release-2.30.12/SDL2-2.30.12.tar.gz \
             -o "$RUNNER_TEMP/SDL2-2.30.12.tar.gz"
-          mkdir -p "$PRIV/mac/SDL2-2.30.12"
           tar -xzf "$RUNNER_TEMP/SDL2-2.30.12.tar.gz" \
-            --strip-components=1 -C "$PRIV/mac/SDL2-2.30.12"
+            --strip-components=1 -C "$PRIV/src/SDL2-2.30.12"
 
-          echo "NDK=$PRIV/android/sdk/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          echo "NDK=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=$PRIV/android/sdk" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$PRIV/android/sdk" >> "$GITHUB_ENV"
 
@@ -89,27 +85,21 @@ jobs:
             -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
 
-      - name: Build native dependencies for both ABIs
-        run: |
-          set -euo pipefail
-          for abi in arm64-v8a armeabi-v7a; do
-            tools/phone/build-deps.sh "$abi"
-          done
+      - name: Build native dependencies (arm64-v8a only)
+        run: tools/phone/build-deps.sh arm64-v8a
 
-      - name: Build the native application for both ABIs
-        run: |
-          set -euo pipefail
-          for abi in arm64-v8a armeabi-v7a; do
-            tools/phone/build.sh "$abi"
-          done
+      - name: Build native application (arm64-v8a only)
+        run: tools/phone/build.sh arm64-v8a
 
-      - name: Assemble debug APKs
+      - name: Assemble arm64-v8a debug APK
+        env:
+          TARGET_ABIS: arm64-v8a
         run: tools/phone/apk.sh debug
 
-      - name: Upload APK artifacts
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: stremio-origin-android-debug-apks
-          path: dist/*.apk
+          name: stremio-origin-android-arm64-debug-apk
+          path: dist/*-arm64-v8a-debug.apk
           if-no-files-found: error
           retention-days: 14

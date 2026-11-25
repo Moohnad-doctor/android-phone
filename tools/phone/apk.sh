@@ -31,6 +31,8 @@ jdk_major() {
 }
 JDK=""
 for c in \
+  "${JAVA_HOME:-}" \
+  "$(command -v java >/dev/null 2>&1 && dirname "$(dirname "$(readlink -f "$(command -v java)")")" || true)" \
   "$(brew --prefix openjdk 2>/dev/null || true)/libexec/openjdk.jdk/Contents/Home" \
   "$(brew --prefix openjdk@17 2>/dev/null || true)/libexec/openjdk.jdk/Contents/Home" \
   "$(/usr/libexec/java_home -v 23 2>/dev/null || true)" \
@@ -39,7 +41,7 @@ for c in \
   major="$(jdk_major "$c")"
   if [ "$major" -ge 17 ] && [ "$major" -le 23 ]; then JDK="$c"; break; fi
 done
-[ -n "$JDK" ] || { echo "error: no JDK 17-23 found (brew install openjdk@17)" >&2; exit 1; }
+[ -n "$JDK" ] || { echo "error: no JDK 17-23 found (install or set JAVA_HOME)" >&2; exit 1; }
 export JAVA_HOME="$JDK"
 echo "JDK: $JAVA_HOME"
 
@@ -48,7 +50,7 @@ printf 'sdk.dir=%s\n' "$ANDROID_HOME" > "$PHONE/local.properties"
 
 # Native libraries: one set per ABI, extracted by Gradle (useLegacyPackaging).
 JNI="$PHONE/app/src/main/jniLibs"
-for ABI in arm64-v8a armeabi-v7a; do
+for ABI in ${TARGET_ABIS:-arm64-v8a armeabi-v7a}; do
   mkdir -p "$JNI/$ABI"
   rm -f "$JNI/$ABI"/*.so
   B="$ROOT/build/phone-$ABI"
@@ -81,18 +83,18 @@ if [ "$MODE" = release ] && [ ! -f "$PROPS" ]; then
   echo "created keystore: $STORE"
 fi
 
-"$GRADLE" -p "$PHONE" "$TASK" --console=plain
+"$GRADLE" -p "$PHONE" "$TASK" -PtargetAbis="${TARGET_ABIS:-arm64-v8a,armeabi-v7a}" --console=plain
 
 VERSION="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" "$PHONE/app/build.gradle" | head -1)"
 OUTDIR="$PHONE/app/build/outputs/apk/$MODE"
 # one APK per processor (libVLC is large): 64-bit phones take arm64-v8a, older ones armeabi-v7a
 GITREV=$(git -C "$ROOT" rev-parse --short=10 HEAD 2>/dev/null || echo unknown)$(git -C "$ROOT" diff --quiet HEAD -- src 2>/dev/null || echo "+$(git -C "$ROOT" diff HEAD -- src | shasum | cut -c1-6)")   # (uncommitted changes: their own fingerprint, so each test build keeps its own debug copy)
-for ABI in arm64-v8a armeabi-v7a; do D="$ROOT/dist/dbg/$GITREV/$ABI"; mkdir -p "$D"; for f in libmain.dbg.so libsbengine.dbg.so; do [ -f "$ROOT/build/phone-$ABI/$f" ] && cp "$ROOT/build/phone-$ABI/$f" "$D/"; done; done   # (a crash report's addresses, named with these: llvm-addr2line -fCe)
+for ABI in ${TARGET_ABIS:-arm64-v8a armeabi-v7a}; do D="$ROOT/dist/dbg/$GITREV/$ABI"; mkdir -p "$D"; for f in libmain.dbg.so libsbengine.dbg.so; do [ -f "$ROOT/build/phone-$ABI/$f" ] && cp "$ROOT/build/phone-$ABI/$f" "$D/"; done; done   # (a crash report's addresses, named with these: llvm-addr2line -fCe)
 [ "$MODE" = release ] && { R="$ROOT/dist/dbg/release-$VERSION-$GITREV"; mkdir -p "$R"; cp -R "$ROOT/dist/dbg/$GITREV/." "$R/"; }   # (a release's debug files kept apart, never pruned: a user's crash report names its code from them)
 ls -dt "$ROOT"/dist/dbg/*/ 2>/dev/null | grep -v '/release-' | tail -n +6 | while read -r d; do rm -rf "${d:?}"; done   # (the newest 5 test builds' debug files kept: each is ~185 MB, and they filled the disk twice)
 SUF="-$MODE"; [ "$MODE" = release ] && SUF=""   # (a release: the very name the app's updater looks for in the releases, stremio-origin-phone-<x.y.z>-<abi>.apk)
 mkdir -p "$ROOT/dist"; if [ -z "$SUF" ]; then rm -f "$ROOT/dist/stremio-origin-phone-"*"-arm64-v8a.apk" "$ROOT/dist/stremio-origin-phone-"*"-armeabi-v7a.apk"; else rm -f "$ROOT/dist/stremio-origin-phone-"*"$SUF.apk"; fi; n=0
-for ABI in arm64-v8a armeabi-v7a; do
+for ABI in ${TARGET_ABIS:-arm64-v8a armeabi-v7a}; do
   for f in "$OUTDIR/app-$ABI-$MODE.apk" "$OUTDIR/app-$ABI-$MODE-unsigned.apk"; do
     [ -f "$f" ] || continue; DEST="$ROOT/dist/stremio-origin-phone-$VERSION-$ABI$SUF.apk"; cp "$f" "$DEST"; n=$((n + 1))
     echo "APK: $DEST ($(ls -lh "$DEST" | awk '{print $5}'))"; break
