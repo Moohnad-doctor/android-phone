@@ -55,7 +55,7 @@ float row_draw(const char *title, const ItemList *l, int wide, float y, Scroll *
   if (!l || l->n <= 0) return 0;
   if (y + top + ch < -10 || y > SB_H + 10) { scroll_tick(s); return top + ch + 36; }
   if (rowIdx >= 0) { int rtlHead = app_rtl(); float aw = 44, ax = rtlHead ? SB_W - PAD - aw : PAD, tx = rtlHead ? PAD : PAD + aw + 8, tw = SB_W - 2 * PAD - aw - 8;
-    text_draw(title, tx, y + 6, F_H2 - 2, 800, TXT, -0.3f, tw, ALIGN_START); icon_draw_rot("ph_chev", ax + 10, y + 13, 24, WHITE_A(210), rtlHead ? 180 : 0); hit_act(ax, y, aw, 48, row_category_act, rowIdx, 0);
+    text_draw(title, tx, y + 6, F_H2 - 2, 800, TXT, -0.3f, tw, ALIGN_START); icon_draw_rot("ph_chev", ax + 10, y + 13, 24, WHITE_A(210), rtlHead ? 180 : 0); hit_act(tx, y, tw, 48, row_category_act, rowIdx, 0); hit_act(ax, y, aw, 48, row_category_act, rowIdx, 0);
   } else text_draw(title, PAD, y + 6, F_H2 - 2, 800, TXT, -0.3f, SB_W - 2 * PAD, ALIGN_START);
   s->max = fmaxf(0.0f, l->n * (cw + gap) - gap + 2 * PAD - SB_W); if (s->pos > s->max) s->pos = s->max; scroll_tick(s); ph_drag(0, y + top, SB_W, ch + 8, s, 0);
   int rtl = app_rtl();
