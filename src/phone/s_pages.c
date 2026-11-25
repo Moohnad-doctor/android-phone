@@ -419,7 +419,7 @@ static void so_key_back(void);
 static void close_act(int a, int b) { (void)a; (void)b; so_key_back(); }
 static void q_draw(void) {
   float fieldY = INS_T + 122, top = fieldY + 104; /* the field rides on the keyboard */
-  ph_drag(0, top, SB_W, fieldY - top, &Q.v, 1); scroll_tick(&Q.v);
+  float searchBottom = SB_H - (KB_H > INS_B ? KB_H : INS_B); ph_drag(0, top, SB_W, searchBottom - top, &Q.v, 1); scroll_tick(&Q.v);
   float y = top + 10 - Q.v.pos;
   for (int i = 0; i < Q.nd; i++) if (Q.res[i].n > 0) { char t[200]; snprintf(t, sizeof t, "%s", Q.defs[i].title); for (char *c = t; *c; c++) if (*c != ' ' && *c != '.' && (unsigned char)*c != 0xc2 && (unsigned char)*c != 0xb7 && *c != '-') { text_draw(t, PAD, y, F_H2 - 2, 800, TXT, -0.3f, SB_W - 2 * PAD, ALIGN_START); y += 52; break; } /* no heading when it has no words */ y += poster_grid(&Q.res[i], y, q_focus, i, Q.fr == i ? Q.fi : -1) + 20; }
   if (Q.q[0] && Q.asked && Q.got < Q.nd) spinner(SB_W / 2, y + 50, 20);
