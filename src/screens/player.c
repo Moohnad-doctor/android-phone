@@ -437,7 +437,21 @@ static void ep_back_check(void) {
   P.epState = 1; cJSON *l = lib_get(P.id); int n = l ? lib_unwatch_after(l, P.videos, P.vid) : 0;
   fprintf(stderr, "[lib] watching again from this episode: it is the series' place now, %d later episode(s) unwatched\n", n);
 }
-static void save_progress(int push) { double d = dur(); if (!P.id[0] || P.isTrailer || d <= 0 || live_title() || getenv("SB_PLAY_NOSAVE")) return; /* (a live broadcast: no place in Continue Watching, nothing to resume) */ /* (SB_PLAY_NOSAVE: development plays leave the library alone) */
+static void offline_progress_save(double position, double duration) {
+  if (strncmp(P.url, "file:", 5) || !P.id[0] || !P.vid[0] || duration <= 0) return;
+  char key[180]; snprintf(key, sizeof key, "%s|%s", P.id, P.vid);
+  cJSON *old = store_node("offlineProgress"), *root = old ? cJSON_Duplicate(old, 1) : cJSON_CreateObject();
+  if (!root) return;
+  cJSON_DeleteItemFromObject(root, key);
+  cJSON *v = cJSON_CreateObject(); if (!v) { cJSON_Delete(root); return; }
+  cJSON_AddNumberToObject(v, "position_ms", position * 1000.0);
+  cJSON_AddNumberToObject(v, "duration_ms", duration * 1000.0);
+  cJSON_AddStringToObject(v, "download_id", P.vid);
+  cJSON_AddStringToObject(v, "content_id", P.id);
+  cJSON_AddItemToObject(root, key, v);
+  store_set_node("offlineProgress", root);
+}
+static void save_progress(int push) { double d = dur(); if (!P.id[0] || P.isTrailer || d <= 0 || live_title() || getenv("SB_PLAY_NOSAVE")) return; offline_progress_save(video_time(), d); /* (a live broadcast: no place in Continue Watching, nothing to resume) */ /* (SB_PLAY_NOSAVE: development plays leave the library alone) */
   ep_decide(); if (P.epState != 1) return; /* an earlier episode not watched long enough yet, or a special: the series keeps its place */
   int ep = episodic() && P.next.has && P.next.vid[0];
   if (P.marked && !ep) return; /* watched to the credits, nothing after it: out of Continue Watching (marking it set its place to the start) */
@@ -461,6 +475,12 @@ static void try_resume(void) {
   if (live_title()) return; /* a broadcast plays from where it is now */
   if (P.startAt < 0) return; /* "Watch from the beginning" */
   if (P.startAt > 0) { video_seek(P.startAt); return; } /* another source: same moment */
+  if (!strncmp(P.url, "file:", 5) && P.id[0] && P.vid[0]) {
+    char key[180]; snprintf(key, sizeof key, "%s|%s", P.id, P.vid);
+    const cJSON *v = js_obj(store_node("offlineProgress"), key);
+    double ms = js_num(v, "position_ms", 0), dm = js_num(v, "duration_ms", 0), sec = ms / 1000.0, d0 = dur();
+    if (sec > 5 && (!dm || !d0 || sec < d0 - 30)) { video_seek(sec); char ft[32]; fmt_time(sec, ft, sizeof ft); snprintf(resumeMsg, sizeof resumeMsg, "%s%s", T("Resuming from "), ft); return; }
+  }
   { float tp = lib_trakt_resume(P.id, P.vid); double d = dur(); if (tp > 0 && d > 0) { double sec = tp * d; /* Trakt's pause, the newer (another app, another device) */
       if (sec > 5 && sec < d - 30) { video_seek(sec); char ft[32]; fmt_time(sec, ft, sizeof ft); snprintf(resumeMsg, sizeof resumeMsg, "%s%s", T("Resuming from "), ft); fprintf(stderr, "[trakt] resumed at Trakt's pause, %.0f %%\n", tp * 100); } return; } }
   cJSON *l = lib_get(P.id); const cJSON *st = js_obj(l, "state"); if (!st) return;
