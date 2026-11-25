@@ -68,7 +68,9 @@ echo "== phone ($T)"; OBJS=()
 for f in "$TP"/crypto/*.c; do o="$B/tp/crypto_$(basename "${f%.c}").o"; [ -f "$o" ] && [ "$o" -nt "$f" ] || $CC -w $OPT -I$TP/crypto -c "$f" -o "$o"; OBJS+=("$o"); done
 SCREENS=$(ls "$ROOT"/src/screens/*.c | grep -v -E '/(board|detail|cwmenu|lib|search|settings|login|livehub)\.c$')   # the phone has its own in their places
 CORE=$(ls "$ROOT"/src/core/*.c | grep -v -E '/(castlink)\.c$')   # (the TV's cast receiver: a phone is never one)
-for f in $CORE "$ROOT"/src/ui/*.c $SCREENS "$ROOT"/src/main.c "$ROOT"/src/phone/*.c $PLATSRC; do   # (applog.c every time: it names the build, SB_GITREV, that crash addresses belong to)
+# The phone shell owns its login screen, but reuses the QR pairing service and state from the shared login module.
+# Compile the module for its login_qr_* API; -ffunction-sections/--gc-sections discard the unused TV screen paths.
+for f in $CORE "$ROOT"/src/ui/*.c $SCREENS "$ROOT/src/screens/login.c" "$ROOT"/src/main.c "$ROOT"/src/phone/*.c $PLATSRC; do   # (applog.c every time: it names the build, SB_GITREV, that crash addresses belong to)
   o="$B/obj/$(echo "${f#$ROOT/src/}" | tr / _).o"; FL="$CFLAGS"; case "$f" in *.m) FL="${CFLAGS/-std=c11/}";; esac
   if [ ! -f "$o" ] || [ "$f" -nt "$o" ] || [ "$f" = "$ROOT/src/core/applog.c" ] || [ -n "$(find "$ROOT/src" -name '*.h' -newer "$o" | head -1)" ] || [ "$B/sbkeys.h" -nt "$o" ]; then $CC $FL -c "$f" -o "$o"; fi; OBJS+=("$o"); done
 if [ "$T" = mac ]; then $CXX $OPT -o "$B/stremioorigin-phone" "${OBJS[@]}" "$B/tp/libass.a" "$B/tp/libtp.a" $LIBS; OUT="$B/stremioorigin-phone"

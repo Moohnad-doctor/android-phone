@@ -427,12 +427,24 @@ void sb_catalog_page(const CatalogDef *d, int skip, void (*cb)(ItemList *, int, 
 }
 /* every catalog that takes a search (and needs nothing else), in addon order */
 int sb_search_defs(const char *q, CatalogDef *out, int max) {
-  int n = 0; cJSON *a = sb_addons(); const cJSON *ad; if (!a) return 0; static const char *const SN[1] = { "search" };
-  cJSON_ArrayForEach(ad, a) { if (!sb_addon_on(ad)) continue; const cJSON *cats = js_arr(js_obj(ad, "manifest"), "catalogs"), *cat; char base[512]; addon_base(ad, base, sizeof base);
+  int n = 0; cJSON *a = sb_addons(); const cJSON *ad; static const char *const SN[1] = { "search" };
+  /* Cinemeta is always queried alongside installed search catalogs. */
+  if (max <= 0) return 0;
+  char path[640], ex[480] = "";
+  snprintf(path, sizeof path, CINEMETA "/catalog/movie/top");
+  addon_extra_add(ex, sizeof ex, "search", q ? q : "");
+  def_set(&out[n++], "Cinemeta · Movies", "movie", path, ex, 0, "cin_search_movie");
+  if (n < max) {
+    snprintf(path, sizeof path, CINEMETA "/catalog/series/top");
+    def_set(&out[n++], "Cinemeta · Series", "series", path, ex, 0, "cin_search_series");
+  }
+  if (!a) return n;
+  cJSON_ArrayForEach(ad, a) { if (!sb_addon_on(ad) || n >= max) continue; const cJSON *cats = js_arr(js_obj(ad, "manifest"), "catalogs"), *cat; char base[512]; addon_base(ad, base, sizeof base);
+    if (!strcmp(base, CINEMETA)) continue;
     if (cats) cJSON_ArrayForEach(cat, cats) { const char *ctype = js_str(cat, "type", NULL), *cid = js_str(cat, "id", NULL);
       if (!ctype || !cid || !addon_cat_accepts(cat, SN, 1) || n >= max) continue;
-      char path[512], te[96], ie[300], ex[300] = ""; addon_urlenc(ctype, te, sizeof te); addon_urlenc(cid, ie, sizeof ie); snprintf(path, sizeof path, "%s/catalog/%s/%s", base, te, ie);
-      addon_extra_add(ex, sizeof ex, "search", q); def_set(&out[n++], js_str(cat, "name", ""), ctype, path, ex, 0, ""); } }
+      char catPath[512], te[96], ie[300], catEx[300] = ""; addon_urlenc(ctype, te, sizeof te); addon_urlenc(cid, ie, sizeof ie); snprintf(catPath, sizeof catPath, "%s/catalog/%s/%s", base, te, ie);
+      addon_extra_add(catEx, sizeof catEx, "search", q ? q : ""); def_set(&out[n++], js_str(cat, "name", ""), ctype, catPath, catEx, 0, ""); } }
   return n;
 }
 
@@ -1144,7 +1156,14 @@ typedef struct { void (*cb)(ItemList *, char[6][128], int, void *); void *ud; } 
 static void on_sug(int st, const unsigned char *b, size_t n, void *ud) {
   SugReq *r = ud; cJSON *j = st == 200 ? net_json(b) : NULL; const cJSON *d = js_arr(j, "d"), *x;
   ItemList *l = calloc(1, sizeof *l); l->items = calloc(16, sizeof(Item)); char names[6][128]; int nn = 0;
-  if (d) cJSON_ArrayForEach(x, d) { if (l->n >= 12) break; const char *id = js_str(x, "id", ""), *qid = js_str(x, "qid", ""); if (strncmp(id, "tt", 2)) continue;
+  if (d) cJSON_ArrayForEach(x, d) { const char *id = js_str(x, "id", ""), *qid = js_str(x, "qid", ""), *label = js_str(x, "l", "");
+    /* IMDb person suggestions are search terms too: selecting one dispatches that name to Cinemeta and every
+       installed catalog declaring the search extra, rather than silently dropping actor queries. */
+    if (!strncmp(id, "nm", 2) || !strcmp(qid, "name")) {
+      if (nn < 6 && label[0]) { int dup = 0; for (int i = 0; i < nn; i++) if (!strcasecmp(names[i], label)) dup = 1; if (!dup) copy_str(names[nn++], 128, label); }
+      continue;
+    }
+    if (strncmp(id, "tt", 2) || l->n >= 12) continue;
     const char *type = (!strcmp(qid, "tvSeries") || !strcmp(qid, "tvMiniSeries")) ? "series" : (!strcmp(qid, "movie") || !strcmp(qid, "tvMovie") || !strcmp(qid, "tvSpecial") || !strcmp(qid, "short") || !strcmp(qid, "video")) ? "movie" : NULL; if (!type) continue;
     Item *it = &l->items[l->n++]; memset(it, 0, sizeof *it); copy_str(it->id, sizeof it->id, id); copy_str(it->type, sizeof it->type, type); copy_str(it->name, sizeof it->name, js_str(x, "l", ""));
     const char *img = js_str(js_obj(x, "i"), "imageUrl", NULL); if (img) { copy_str(it->poster, sizeof it->poster, img); char *v = strstr(it->poster, "._V1_."); if (v) { char ext[8]; copy_str(ext, sizeof ext, v + 5); snprintf(v, sizeof it->poster - (v - it->poster), "._V1_QL75_UX300_%s", ext); } }

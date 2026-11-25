@@ -142,5 +142,5 @@ void app_quit(void);
 int  app_quitting(void);
 
 /* the page colour */
-#define PAGE RGB(12, 11, 17)
+#define PAGE 0xff000000u
 #endif

@@ -8,5 +8,12 @@ void login_loading_draw(double since, float a);
 void login_glows_draw(void); /* the sign-in's two glows, where they are now */
 void login_backdrop_draw(void); /* the sign-in's whole background (its picture, the glows over it): the same from signing in through the loading and the guide */
 void login_glow_bake(void);   /* (in the tick) the glows, small, for the glass over them */
+void login_qr_start(void);
+void login_qr_tick(float dt);
+void login_qr_stop(void);
+int login_qr_ready(void);
+const char *login_qr_code(void);
+const char *login_qr_link(void);
+const char *login_qr_status(void);
 GLuint login_glow_tex(void);  /* that picture (upside down, as targets are), 0 none */
 #endif

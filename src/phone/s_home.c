@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include "phone/phone.h"
 #include "core/keys.h"
 #include "core/i18n.h"
@@ -110,12 +111,81 @@ static float feat_draw(float y) {
 }
 static Board *me(void) { return &B[0]; } /* (one board: Home) */
 static void lib_rows(Board *b) { itemlist_clear(&b->cw); lib_cw_items(&b->cw); itemlist_clear(&b->up); notify_upcoming(&b->up); b->lib = lib_version(); } /* Continue Watching (new episodes too) and Upcoming: from the library */
+static void cw_card_labels(const ItemList *l, const Scroll *s, float y) {
+  if (!l || !s) return; float cw = WIDE_CW * 1.30f, ch = WIDE_CH * 1.30f, gap = 14, top = 52; int rtl = app_rtl();
+  for (int i = 0; i < l->n; i++) {
+    float x = PAD + i * (cw + gap) - s->pos; if (rtl) x = SB_W - x - cw;
+    if (x > SB_W || x + cw < 0) continue;
+    CwInfo info; if (lib_cw_info(&l->items[i], &info) && info.leftMin > 0) {
+      char rem[48]; snprintf(rem, sizeof rem, "متبقي %.0f د", info.leftMin);
+      float bw = text_width(rem, F_TINY, 800, 0) + 24, bx = x + 12, by = y + top + 12;
+      gfx_rrect(bx, by, bw, 34, 17, BLACK_A(190)); text_draw(rem, bx + bw / 2, by + 17 - text_line_height(F_TINY) / 2.0f, F_TINY, 800, WHITE_A(245), 0, 0, ALIGN_CENTER);
+    }
+    {
+      char label[384];
+      if (!strcmp(l->items[i].type, "series")) {
+        int season = 0, episode = 0; const char *sep = strchr(l->items[i].videoId, ':');
+        if (sep) sscanf(sep + 1, "%d:%d", &season, &episode);
+        if (season > 0 && episode > 0) snprintf(label, sizeof label, "%s  ·  S%d E%d", l->items[i].name, season, episode);
+        else snprintf(label, sizeof label, "%s", l->items[i].name);
+      } else snprintf(label, sizeof label, "%s", l->items[i].name);
+      text_draw(label, x + cw / 2, y + top + ch + 5, F_TINY + 1, 700, TXT, 0, cw - 8, ALIGN_CENTER);
+    }
+  }
+}
+
 
 static void got_row(ItemList *l, int cached, void *ud) { (void)cached; unsigned tag = (unsigned)(uintptr_t)ud; Board *b = &B[tag >> 24]; int i = (tag >> 8) & 255; if ((tag & 255) != (b->gen & 255) || i >= b->n || !l) { if (l) itemlist_free(l); return; }
   HRow *r = &b->rows[i]; if (!l->n && l->total < 0 && !r->list.n && r->retries < 3) { static const double W[3] = { 8, 20, 45 }; r->retryAt = app_now() + W[r->retries]; r->retries++; itemlist_free(l); fprintf(stderr, "[home] %s: no answer, asked again in %.0f s\n", r->def.title, W[r->retries - 1]); return; } /* (an addon that makes its lists on demand: a slow first answer is not the end of the row) */
   if (l->n > 0 || !r->got) { itemlist_clear(&r->list); r->list = *l; free(l); } else itemlist_free(l); r->got = 1; }
+static int home_has(const char *s, const char *needle) {
+  if (!s || !needle || !*needle) return 0;
+  for (; *s; s++) { const char *a = s, *b = needle; while (*a && *b && tolower((unsigned char)*a) == tolower((unsigned char)*b)) { a++; b++; } if (!*b) return 1; }
+  return 0;
+}
+static int home_pick(const CatalogDef *src, int n, const char *type, const char *const *words, int nw, const int *used) {
+  for (int i = 0; i < n; i++) {
+    if (used && used[i]) continue;
+    if (type && strcmp(src[i].type, type)) continue;
+    for (int k = 0; k < nw; k++) if (home_has(src[i].title, words[k])) return i;
+  }
+  return -1;
+}
+static int home_curate(CatalogDef *out, int max) {
+  CatalogDef all[MAXR]; int n = sb_home_defs(all, MAXR), used[MAXR] = {0}, count = 0;
+  static const char *trend[] = { "trending", "popular", "top" };
+  static const char *now[] = { "now playing", "airing", "currently" };
+  static const char *movie[] = { "movies", "movie", "film" };
+  static const char *series[] = { "series", "shows", "tv" };
+  static const char *anime[] = { "anime", "animation" };
+  const char *labels[5] = { "Trending now", "Now playing", "Movies", "Series", "Anime" };
+  const char *types[5] = { NULL, "movie", "movie", "series", "series" };
+  const char *const *terms[5] = { trend, now, movie, series, anime };
+  const int lens[5] = { 3, 3, 3, 3, 2 };
+  for (int slot = 0; slot < 5 && count < max; slot++) {
+    int pick = home_pick(all, n, types[slot], terms[slot], lens[slot], used);
+    if (pick < 0 && slot == 0) pick = home_pick(all, n, "movie", movie, 3, used);
+    if (pick < 0 && slot == 1) pick = home_pick(all, n, "movie", movie, 3, used);
+    if (pick < 0 && slot == 2) pick = home_pick(all, n, "movie", movie, 3, used);
+    if (pick < 0 && slot == 3) pick = home_pick(all, n, "series", series, 3, used);
+    if (pick < 0 && slot == 4) pick = home_pick(all, n, "series", anime, 2, used);
+    if (pick < 0) {
+      for (int i = 0; i < n; i++) if (!used[i] && (!types[slot] || !strcmp(all[i].type, types[slot]))) { pick = i; break; }
+    }
+    if (pick < 0 && n) pick = slot < 3 ? 0 : n - 1;
+    if (pick < 0) continue;
+    out[count] = all[pick]; snprintf(out[count].title, sizeof out[count].title, "%s", labels[slot]);
+    if (slot == 4 && !home_has(all[pick].title, "anime") && !home_has(all[pick].title, "animation")) {
+      if (!out[count].extra[0]) snprintf(out[count].extra, sizeof out[count].extra, "genre=Animation");
+      else { size_t exn = strlen(out[count].extra); if (exn + sizeof "&genre=Animation" < sizeof out[count].extra) strcat(out[count].extra, "&genre=Animation"); }
+      snprintf(out[count].url, sizeof out[count].url, "%s/%s.json", out[count].path, out[count].extra);
+    }
+    used[pick] = 1; count++;
+  }
+  return count;
+}
 static void load(Board *b, int disc) {
-  CatalogDef defs[MAXR]; int n = disc ? sb_disc_defs(defs, MAXR) : sb_home_defs(defs, MAXR);
+  CatalogDef defs[MAXR]; int n = disc ? sb_disc_defs(defs, MAXR) : home_curate(defs, 5);
   live_refresh(0); if (live_catalogs() > 0) { int k = 0; for (int i = 0; i < n; i++) if (!live_type(defs[i].type)) defs[k++] = defs[i]; n = k; } /* the live catalogs: in the Live TV row's All channels, not as rows of posters */
   for (int i = 0; i < b->n; i++) itemlist_clear(&b->rows[i].list); memset(b->rows, 0, sizeof b->rows); b->n = n; b->gen++;
   for (int i = 0; i < n; i++) { b->rows[i].def = defs[i]; b->rows[i].retries = 0; b->rows[i].retryAt = 0; sb_catalog(&b->rows[i].def, got_row, (void *)(uintptr_t)((disc << 24) | (i << 8) | (b->gen & 255))); }
@@ -182,9 +252,8 @@ static void draw(void) {
     static ItemList cwF; static int fKey = -1, fN = -1; static const Item *fP;
     if (fKey != b->filter || fN != b->cw.n || fP != b->cw.items) { fKey = b->filter; fN = b->cw.n; fP = b->cw.items; itemlist_clear(&cwF); cwF.items = calloc(b->cw.n ? b->cw.n : 1, sizeof(Item)); cwF.n = 0;
       for (int i = 0; i < b->cw.n; i++) if (b->filter == 0 || !strcmp(b->cw.items[i].type, b->filter == 1 ? "series" : "movie")) cwF.items[cwF.n++] = b->cw.items[i]; }
-    { static float cwK = -1; if (cwF.n > 0) b->lastY[0] = y + b->v.pos; y += row_draw_k(T("Continue Watching"), b->filter ? &cwF : &b->cw, 1, y, &b->cws, -2, focus, b->fr == -2 ? b->fi : -1, &cwK); } }
-  { static Scroll lvS; if (!b->filter) y += ph_live_row(y, &lvS, -5, focus, b->fr == -5 ? b->fi : -1); } /* a live addon on: its channels, All channels first */
-  { static float upK = -1; if (b->filter != 2) y += row_draw_k(T("Upcoming episodes"), &b->up, 1, y, &b->ups, -4, focus, b->fr == -4 ? b->fi : -1, &upK); } /* the library's series airing in the next two weeks: wide cards as the TV's, the episode named on it and when it airs in a chip (Today, Tomorrow, In 3 days) */
+    { static float cwK = -1; const ItemList *watch = b->filter ? &cwF : &b->cw; float rowY = y; if (cwF.n > 0) b->lastY[0] = y + b->v.pos; y += row_draw_k(T("Continue Watching"), watch, 1, y, &b->cws, -2, focus, b->fr == -2 ? b->fi : -1, &cwK); cw_card_labels(watch, &b->cws, rowY); } }
+  /* Home's discovery surface is intentionally limited to the five curated catalog rows below. */
   int waiting = 0;
   for (int i = 0; i < b->n; i++) { HRow *r = &b->rows[i]; b->lastY[i + 2] = y + b->v.pos - INS_T - 20;
     if (b->filter && strcmp(r->def.type, b->filter == 1 ? "series" : "movie")) continue;
@@ -205,6 +274,133 @@ static int key(int k) { Board *b = me();
 }
 static const Item *focused(void) { return focused_item(); }
 static int origin(float *x, float *y) { *x = SB_W / 2; *y = SB_H / 2; return 0; }
+/* A phone-native category view: it owns its catalog query, three filter pills and a vertically scrolling poster grid.
+   It is an overlay over Home, so the top navigation pill and the Home spotlight remain intact underneath. */
+static struct {
+  CatalogDef base, query;
+  ItemList all, shown;
+  char title[96], genre[48];
+  int year, sort, menu, busy, focus;
+  unsigned gen;
+  Scroll scroll;
+} HC;
+static int hc_year(const Item *it) {
+  const char *p = it->metaLine;
+  while (p && *p) { if (p[0] && p[1] && p[2] && p[3] && p[0] >= '1' && p[0] <= '2' && p[1] >= '0' && p[1] <= '9' && p[2] >= '0' && p[2] <= '9' && p[3] >= '0' && p[3] <= '9') { int y = (p[0]-'0')*1000 + (p[1]-'0')*100 + (p[2]-'0')*10 + p[3]-'0'; if (y >= 1890 && y <= 2100) return y; } p++; }
+  return 0;
+}
+static double hc_rating(const Item *it) { const cJSON *m = sb_meta_cached(it->type, it->id); return js_num(m, "imdbRating", js_num(m, "rating", 0)); }
+static int hc_sort_mode;
+static int hc_cmp(const void *aa, const void *bb) {
+  const Item *a = aa, *b = bb;
+  double x = hc_sort_mode == 1 ? a->airAt : hc_sort_mode == 2 ? hc_year(a) : hc_rating(a);
+  double y = hc_sort_mode == 1 ? b->airAt : hc_sort_mode == 2 ? hc_year(b) : hc_rating(b);
+  return x < y ? 1 : x > y ? -1 : 0;
+}
+static void hc_apply(void) {
+  itemlist_clear(&HC.shown);
+  if (!HC.all.n) return;
+  HC.shown.items = calloc((size_t)HC.all.n, sizeof(Item));
+  if (!HC.shown.items) return;
+  for (int i = 0; i < HC.all.n; i++) {
+    int y = hc_year(&HC.all.items[i]), keep = !HC.year || (HC.year == 1 ? y > 0 && y < 1980 : HC.year == 2020 ? y >= 2020 && y <= 2023 : y == HC.year);
+    if (keep) HC.shown.items[HC.shown.n++] = HC.all.items[i];
+  }
+  HC.shown.total = HC.shown.n;
+  if (HC.sort && HC.shown.n > 1) { hc_sort_mode = HC.sort; qsort(HC.shown.items, (size_t)HC.shown.n, sizeof(Item), hc_cmp); }
+  if (HC.focus >= HC.shown.n) HC.focus = HC.shown.n ? HC.shown.n - 1 : 0;
+}
+static void hc_got(ItemList *l, int cached, void *ud) {
+  (void)cached;
+  if ((unsigned)(uintptr_t)ud != HC.gen) { if (l) itemlist_free(l); return; }
+  HC.busy = 0;
+  if (l) { itemlist_clear(&HC.all); HC.all = *l; free(l); hc_apply(); }
+}
+static void hc_urlenc(const char *src, char *dst, size_t cap) {
+  static const char hex[] = "0123456789ABCDEF"; size_t n = 0;
+  for (const unsigned char *p = (const unsigned char *)src; *p && n + 4 < cap; p++) {
+    unsigned char c = *p;
+    if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~') dst[n++] = (char)c;
+    else { dst[n++] = '%'; dst[n++] = hex[c >> 4]; dst[n++] = hex[c & 15]; }
+  }
+  dst[n] = 0;
+}
+static void hc_query(void) {
+  HC.gen++; HC.busy = 1; HC.scroll.pos = HC.scroll.vel = HC.scroll.max = 0; HC.focus = 0;
+  itemlist_clear(&HC.all); itemlist_clear(&HC.shown);
+  HC.query = HC.base;
+  /* Replace, rather than duplicate, a genre extra already present on the source catalog. */
+  char clean[200] = "", extra[200]; snprintf(extra, sizeof extra, "%s", HC.base.extra);
+  const char *p = extra;
+  while (*p) {
+    const char *end = strchr(p, '&'); size_t n = end ? (size_t)(end - p) : strlen(p);
+    if (!(n >= 6 && !strncmp(p, "genre=", 6))) { size_t used = strlen(clean); if (used && used + 1 < sizeof clean) clean[used++] = '&', clean[used] = 0; if (n < sizeof clean - used) { memcpy(clean + used, p, n); clean[used + n] = 0; } }
+    if (!end) break; p = end + 1;
+  }
+  if (HC.genre[0]) { char encoded[144]; hc_urlenc(HC.genre, encoded, sizeof encoded); size_t n = strlen(clean); snprintf(clean + n, sizeof clean - n, "%sgenre=%s", n ? "&" : "", encoded); }
+  snprintf(HC.query.extra, sizeof HC.query.extra, "%s", clean);
+  snprintf(HC.query.url, sizeof HC.query.url, "%s%s%s.json", HC.query.path, clean[0] ? "/" : "", clean);
+  sb_catalog(&HC.query, hc_got, (void *)(uintptr_t)HC.gen);
+}
+static const char *hc_genres[] = { "All genres", "Action", "Comedy", "Drama", "Science Fiction", "Thriller", "Mystery", "Horror", "Adventure" };
+static const char *hc_years[] = { "All years", "2026", "2025", "2024", "2020–2023", "Classic" };
+static const int hc_year_values[] = { 0, 2026, 2025, 2024, 2020, 1 };
+static const char *hc_sorts[] = { "Most popular", "Now playing", "Newest airing", "Highest rated" };
+static int hc_choice;
+static int hc_count(int menu) { return menu == 0 ? 9 : menu == 1 ? 6 : 4; }
+static const char *hc_label(int menu, int i) { return menu == 0 ? T(hc_genres[i]) : menu == 1 ? T(hc_years[i]) : T(hc_sorts[i]); }
+static void hc_filter_act(int menu, int b) { (void)b; HC.menu = HC.menu == menu ? -1 : menu; hc_choice = -1; }
+static void hc_option_act(int i, int b) {
+  (void)b;
+  if (HC.menu == 0) { snprintf(HC.genre, sizeof HC.genre, "%s", i == 0 ? "" : hc_genres[i]); }
+  else if (HC.menu == 1) HC.year = hc_year_values[i];
+  else if (HC.menu == 2) HC.sort = i;
+  HC.menu = -1; hc_query();
+}
+static void hc_focus(int r, int i) { (void)r; HC.focus = i; if (i >= 0 && i < HC.shown.n) accent_tint_fetch(HC.shown.items[i].id, HC.shown.items[i].poster, HC.shown.items[i].logo); }
+static const Item *hc_focused(void) { return HC.focus >= 0 && HC.focus < HC.shown.n ? &HC.shown.items[HC.focus] : NULL; }
+static void hc_open_item(const Item *it) { if (it) app_open_item(it); }
+static int hc_key(int k) {
+  if (k == K_BACK) { app_overlay = NULL; HC.menu = -1; return 1; }
+  if (k == K_OK && hc_focused()) { app_open_item(hc_focused()); return 1; }
+  if (k == K_CH_UP) { scroll_top(&HC.scroll); return 1; }
+  return 0;
+}
+static void hc_tick(float dt) { (void)dt; }
+static void hc_draw(void) {
+  gfx_rect(0, 0, SB_W, SB_H, 0xff000000u);
+  top_bar(HC.title, 1, HC.scroll.pos);
+  float top = phone_free_top() + 86, x = PAD, gap = 12;
+  const char *g = HC.genre[0] ? T(HC.genre) : T("All genres");
+  const char *yr = HC.year == 1 ? T("Classic") : HC.year == 2020 ? "2020–2023" : HC.year ? (HC.year == 2026 ? "2026" : HC.year == 2025 ? "2025" : "2024") : T("All years");
+  const char *so = T(hc_sorts[HC.sort]);
+  x += chip(x, top, g, HC.menu == 0 || HC.genre[0], hc_filter_act, 0, 0) + gap;
+  x += chip(x, top, yr, HC.menu == 1 || HC.year, hc_filter_act, 1, 0) + gap;
+  chip(x, top, so, HC.menu == 2 || HC.sort, hc_filter_act, 2, 0);
+  float gridY = top + 76;
+  if (HC.menu >= 0) {
+    int n = hc_count(HC.menu); float rowH = 54, panelH = n * rowH + 16, px = PAD, py = gridY;
+    float pw = SB_W - 2 * PAD;
+    ph_glass(px, py, pw, panelH, 22, RGBA(12, 12, 14, 246)); gfx_ring(px, py, pw, panelH, 22, 1, WHITE_A(28));
+    for (int i = 0; i < n; i++) { float ry = py + 8 + i * rowH; if (ph_pressed(px + 8, ry, pw - 16, rowH)) gfx_rrect(px + 8, ry, pw - 16, rowH, 14, WHITE_A(18)); text_draw(hc_label(HC.menu, i), px + 24, ry + rowH / 2 - text_line_height(F_BODY) / 2, F_BODY, 600, TXT, 0, pw - 48, ALIGN_START); hit_act(px + 8, ry, pw - 16, rowH, hc_option_act, i, 0); }
+    gridY += panelH + 16;
+  }
+  float bottom = SB_H - INS_B - BAR_H - 24;
+  ph_drag(0, gridY, SB_W, bottom - gridY, &HC.scroll, 1); scroll_tick(&HC.scroll);
+  float gy = gridY + 12 - HC.scroll.pos;
+  float gh = poster_grid(&HC.shown, gy, hc_focus, 0, HC.focus);
+  HC.scroll.max = fmaxf(0, gy + gh + HC.scroll.pos - bottom + 24);
+  if (HC.busy) spinner(SB_W / 2, gridY + 70, 20);
+  else if (!HC.shown.n) text_draw(T("None found"), SB_W / 2, gridY + 70, F_BODY, 500, TXT2, 0, SB_W - 2 * PAD, ALIGN_CENTER);
+}
+static Screen hcLayer = { NULL, NULL, hc_key, hc_tick, hc_draw, hc_focused, hc_open_item, NULL, NULL, NULL };
+void ph_home_category_open(int row) {
+  Board *b = me(); if (!b || row < 0 || row >= b->n) return;
+  HC.base = b->rows[row].def; snprintf(HC.title, sizeof HC.title, "%s", T(HC.base.title));
+  HC.genre[0] = 0; if (home_has(HC.base.title, "anime")) snprintf(HC.genre, sizeof HC.genre, "Animation");
+  HC.year = 0; HC.sort = 0; HC.menu = -1; HC.focus = 0; HC.scroll.pos = HC.scroll.vel = HC.scroll.max = 0;
+  phone_keyboard(0); hc_query(); app_overlay = &hcLayer;
+}
 Screen phHome = { enter, leave, key, tick, draw, focused, NULL, NULL, origin };
 /* the TV's boards' hooks the core calls when the library changed */
 void board_invalidate(void) { B[0].lib = B[1].lib = ~0u; }

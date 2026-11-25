@@ -4,6 +4,7 @@
 #include <string.h>
 #include <math.h>
 #include "phone/phone.h"
+#include "core/tmdb.h"
 #include "core/keys.h"
 #include "core/i18n.h"
 #include "ui/text.h"
@@ -13,13 +14,13 @@
 
 static void back_act(int a, int b) { (void)a; (void)b; app_back(); }
 void top_bar(const char *title, int back, float scrolled) {
-  float h = INS_T + 88, k = scrolled <= 0 ? 0 : scrolled > 120 ? 1 : scrolled / 120; k = k * k * (3 - 2 * k); /* eased: it comes in softly with the scroll */
+  float base = phone_free_top(), h = base + 64, k = scrolled <= 0 ? 0 : scrolled > 120 ? 1 : scrolled / 120; k = k * k * (3 - 2 * k); /* eased: it comes in softly with the scroll */
   phone_top_glass(h, k);
   float x = PAD;
   (void)back; if (0) { float bx = 10, by = INS_T + 10; /* (no back arrow: a page goes back by a swipe from its left edge, or the bar's Back) */ float pk = press_k(0, INS_T, 90, 88); if (pk > 0) gfx_circle(bx + 36, by + 34, 32, WHITE_A((int)(30 * pk)));
     icon_draw("ph_back", bx + 16, by + 14, 40, WHITE_A(255)); hit_act(0, INS_T, 90, 88, back_act, 0, 0); x = 92; }
   if (title && *title) { float ta = title[0] == 1 ? k : 1; const char *t = title[0] == 1 ? title + 1 : title; /* a leading \001: the title comes in with the glass */
-    if (ta > 0.01f) { gfx_opacity_push(ta); text_draw(t, x, INS_T + 44 - text_line_height(F_H2) / 2.0f + 8 * (1 - ta), F_H2, 800, TXT, -0.3f, SB_W - x - PAD - 80, ALIGN_START); gfx_opacity_pop(); } }
+    if (ta > 0.01f) { gfx_opacity_push(ta); text_draw(t, x, base + 28 - text_line_height(F_H2) / 2.0f + 8 * (1 - ta), F_H2, 800, TXT, -0.3f, SB_W - x - PAD - 80, ALIGN_START); gfx_opacity_pop(); } }
 }
 
 /* a card going away (removed from the Library, or off Continue Watching once watched): it shrinks and fades while
@@ -30,12 +31,24 @@ void ph_leave(const Item *it, int scope, int act) { int f = 0; for (int i = 0; i
 static float leave_k(const Item *it, int scope) { for (int i = 0; i < 8; i++) if (LV[i].id[0] && LV[i].scope == scope && !strcmp(LV[i].id, it->id)) { float k = (float)((app_now() - LV[i].at) / LEAVE_S); k = k < 0 ? 0 : k > 1 ? 1 : k; return k * k * (3 - 2 * k); } return 0; }
 void ph_leave_tick(void) { extern void ph_leave_done(const Item *it, int act); for (int i = 0; i < 8; i++) if (LV[i].id[0] && LV[i].act && app_now() - LV[i].at >= LEAVE_S) { int a = LV[i].act; LV[i].act = 0; ph_leave_done(&LV[i].it, a); }
   for (int i = 0; i < 8; i++) if (LV[i].id[0] && app_now() - LV[i].at > 1.5) LV[i].id[0] = 0; } /* (kept a moment after: the list rebuilt without it, no jump back) */
+static Item phone_localized_item(const Item *src) {
+  Item out = *src;
+  if (app_rtl() && (!strcmp(src->type, "movie") || !strcmp(src->type, "series")) && src->id[0]) {
+    tmdb_wanted(src->id);
+    const TmdbLoc *loc = tmdb_loc(src->type, src->id, 1);
+    if (loc) {
+      if (loc->name && *loc->name) snprintf(out.name, sizeof out.name, "%s", loc->name);
+      if (loc->poster && *loc->poster) snprintf(out.poster, sizeof out.poster, "%s", loc->poster);
+    }
+  }
+  return out;
+}
 void card_at(const Item *it, float x, float y, float w, float h, int wide, int label, unsigned long long key, int pressed) {
   if (x > SB_W || x + w < 0 || y > SB_H || y + h < 0) return;
   int coll = !strcmp(it->type, "collection"); float hold = pressed && !coll ? app_hold_progress() : 0, r = wide ? 12 : 14; if (!pressed && press_k(x, y, w, h) > 0.2f) pressed = 1; /* (a collection: no hold's glow, it has no menu) */
   if (coll && pressed) x += app_card_shake_dx(); /* (held anyway: a short soft shake) */
   lift_begin_z(key, pressed, hold, x, y, w, h, r, 0.04f);
-  card_draw_wh(it, x, y, w, h, wide, label, 1);
+  Item displayItem = phone_localized_item(it); card_draw_wh(&displayItem, x, y, w, h, wide, label, 1);
   lift_end(key, x, y, w, h, r);
   if (hold > 0) hold_trace_draw(x, y, w, h, r, hold);
 }
@@ -44,18 +57,30 @@ void card_at(const Item *it, float x, float y, float w, float h, int wide, int l
    it gliding up; a new one opens, the rows under it making room; *k is its own (kept by the caller, -1 at first) */
 float row_draw_k(const char *title, const ItemList *l, int wide, float y, Scroll *s, int rowIdx, HitFn focus, int focusedIdx, float *k) {
   int n = l ? l->n : 0, alive = 0; for (int i = 0; i < n; i++) if (!((l->items[i].cw || l->items[i].airAt > 0) && leave_k(&l->items[i], 2) > 0)) { alive = 1; break; }
-  float want = alive ? 1 : 0, full = (wide ? WIDE_CH : POSTER_H) + 52 + 36; if (*k < 0) *k = want; else { *k += (want - *k) * fminf(1, phDt * 7); if (fabsf(*k - want) < 0.003f) *k = want; }
+  float want = alive ? 1 : 0, full = (wide ? WIDE_CH * 1.30f : POSTER_H * 1.25f) + 52 + 36; if (*k < 0) *k = want; else { *k += (want - *k) * fminf(1, phDt * 7); if (fabsf(*k - want) < 0.003f) *k = want; }
   if (*k <= 0.001f) return 0; float e = *k * *k * (3 - 2 * *k);
   if (!n) return full * e; /* (gone: only its room, closing) */
   if (e >= 0.999f) return row_draw(title, l, wide, y, s, rowIdx, focus, focusedIdx);
   gfx_clip_push(0, y, SB_W, full * e); gfx_opacity_push(e); row_draw(title, l, wide, y - (1 - e) * 30, s, rowIdx, focus, focusedIdx); gfx_opacity_pop(); gfx_clip_pop(); return full * e; }
+static void row_category_act(int row, int b) { (void)b; extern void ph_home_category_open(int); ph_home_category_open(row); }
 float row_draw(const char *title, const ItemList *l, int wide, float y, Scroll *s, int rowIdx, HitFn focus, int focusedIdx) {
-  float cw = wide ? WIDE_CW : POSTER_W, ch = wide ? WIDE_CH : POSTER_H, gap = 14, top = 52;
+  float cw = wide ? WIDE_CW * 1.30f : POSTER_W * 1.25f, ch = wide ? WIDE_CH * 1.30f : POSTER_H * 1.25f, gap = 14, top = 52;
   if (!l || l->n <= 0) return 0;
   if (y + top + ch < -10 || y > SB_H + 10) { scroll_tick(s); return top + ch + 36; }
-  text_draw(title, PAD, y + 6, F_H2 - 2, 800, TXT, -0.3f, SB_W - 2 * PAD, ALIGN_START);
-  s->max = l->n * (cw + gap) - gap + 2 * PAD - SB_W; scroll_tick(s); ph_drag(0, y + top, SB_W, ch + 8, s, 0);
+  if (rowIdx >= 0) { int rtlHead = app_rtl(); float aw = 44, ax = rtlHead ? SB_W - PAD - aw : PAD, tx = rtlHead ? PAD : PAD + aw + 8, tw = SB_W - 2 * PAD - aw - 8;
+    text_draw(title, tx, y + 6, F_H2 - 2, 800, TXT, -0.3f, tw, ALIGN_START); icon_draw_rot("ph_chev", ax + 10, y + 13, 24, WHITE_A(210), rtlHead ? 180 : 0); hit_act(tx, y, tw, 48, row_category_act, rowIdx, 0); hit_act(ax, y, aw, 48, row_category_act, rowIdx, 0);
+  } else text_draw(title, PAD, y + 6, F_H2 - 2, 800, TXT, -0.3f, SB_W - 2 * PAD, ALIGN_START);
   int rtl = app_rtl();
+  s->max = fmaxf(0.0f, l->n * (cw + gap) - gap + 2 * PAD - SB_W);
+  if (s->pos > s->max) s->pos = s->max;
+  scroll_tick(s);
+  /* In RTL, keep the logical offset inside its exact content bounds even while a finger is down.
+     This prevents the end-of-row spring from pulling the final cards back out of reach. */
+  if (rtl) {
+    if (s->pos < 0) { s->pos = 0; if (s->vel < 0) s->vel = 0; }
+    else if (s->pos > s->max) { s->pos = s->max; if (s->vel > 0) s->vel = 0; }
+  }
+  ph_drag(0, y + top, SB_W, ch + 8, s, 0);
   float acc = 0; for (int i = 0; i < l->n; i++) { float lk = l->items[i].cw || l->items[i].airAt > 0 ? leave_k(&l->items[i], 2) : 0, x = PAD + acc - s->pos; acc += (cw + gap) * (1 - lk); if (rtl) x = SB_W - x - cw; if (x > SB_W || x + cw < 0) continue;
     if (lk >= 0.999f) continue; if (lk > 0) { float k2 = 1 - 0.25f * lk; gfx_opacity_push(1 - lk); gfx_scale_push(k2, k2, x + cw / 2, y + top + ch / 2); } /* going: smaller and fainter, the next ones closing in */
     int pr = ph_pressed(x, y + top, cw, ch) || (focusedIdx == i && app_hold_progress() > 0);
@@ -81,7 +106,7 @@ int button(float x, float y, float w, float h, const char *icon, const char *lab
   if (kind == 1) { gfx_rrect(x, y, w, h, r, ACC); gfx_rrect_v(x, y, w, h, r, WHITE_A(50), WHITE_A(0)); }
   else if (kind == 2) gfx_rrect(x, y, w, h, r, pr ? WHITE_A(215) : WHITE_A(245));
   else if (kind == 3) { if (pr) gfx_rrect(x, y, w, h, r, WHITE_A(14)); }
-  else glass_rrect(x, y, w, h, r, pr ? RGBA(60, 56, 72, 230) : RGBA(46, 42, 58, 220), 0.14f, 0.02f, 0.5f);
+  else glass_rrect(x, y, w, h, r, pr ? RGBA(28, 28, 31, 230) : RGBA(12, 12, 14, 220), 0.14f, 0.02f, 0.5f);
   uint32_t fg = kind == 1 ? ACC_FG : kind == 2 ? RGB(14, 12, 20) : WHITE_A(240);
   float tw = label && *label ? text_width(label, F_BODY, 700, 0) : 0, iw = icon ? 36 : 0, g = icon && tw ? 12 : 0, cx = x + w / 2 - (iw + g + tw) / 2;
   if (icon) icon_draw(icon, cx, y + h / 2 - 18, 36, fg);

@@ -437,7 +437,21 @@ static void ep_back_check(void) {
   P.epState = 1; cJSON *l = lib_get(P.id); int n = l ? lib_unwatch_after(l, P.videos, P.vid) : 0;
   fprintf(stderr, "[lib] watching again from this episode: it is the series' place now, %d later episode(s) unwatched\n", n);
 }
-static void save_progress(int push) { double d = dur(); if (!P.id[0] || P.isTrailer || d <= 0 || live_title() || getenv("SB_PLAY_NOSAVE")) return; /* (a live broadcast: no place in Continue Watching, nothing to resume) */ /* (SB_PLAY_NOSAVE: development plays leave the library alone) */
+static void offline_progress_save(double position, double duration) {
+  if (strncmp(P.url, "file:", 5) || !P.id[0] || duration <= 0) return;
+  const char *videoId = P.vid[0] ? P.vid : P.id; char key[180]; snprintf(key, sizeof key, "%s|%s", P.id, videoId);
+  cJSON *old = store_node("offlineProgress"), *root = old ? cJSON_Duplicate(old, 1) : cJSON_CreateObject();
+  if (!root) return;
+  cJSON_DeleteItemFromObject(root, key);
+  cJSON *v = cJSON_CreateObject(); if (!v) { cJSON_Delete(root); return; }
+  cJSON_AddNumberToObject(v, "position_ms", position * 1000.0);
+  cJSON_AddNumberToObject(v, "duration_ms", duration * 1000.0);
+  cJSON_AddStringToObject(v, "download_id", videoId);
+  cJSON_AddStringToObject(v, "content_id", P.id);
+  cJSON_AddItemToObject(root, key, v);
+  store_set_node("offlineProgress", root);
+}
+static void save_progress(int push) { double d = dur(); if (!P.id[0] || P.isTrailer || d <= 0 || live_title() || getenv("SB_PLAY_NOSAVE")) return; offline_progress_save(video_time(), d); /* (a live broadcast: no place in Continue Watching, nothing to resume) */ /* (SB_PLAY_NOSAVE: development plays leave the library alone) */
   ep_decide(); if (P.epState != 1) return; /* an earlier episode not watched long enough yet, or a special: the series keeps its place */
   int ep = episodic() && P.next.has && P.next.vid[0];
   if (P.marked && !ep) return; /* watched to the credits, nothing after it: out of Continue Watching (marking it set its place to the start) */
@@ -461,6 +475,12 @@ static void try_resume(void) {
   if (live_title()) return; /* a broadcast plays from where it is now */
   if (P.startAt < 0) return; /* "Watch from the beginning" */
   if (P.startAt > 0) { video_seek(P.startAt); return; } /* another source: same moment */
+  if (!strncmp(P.url, "file:", 5) && P.id[0]) {
+    const char *videoId = P.vid[0] ? P.vid : P.id; char key[180]; snprintf(key, sizeof key, "%s|%s", P.id, videoId);
+    const cJSON *v = js_obj(store_node("offlineProgress"), key);
+    double ms = js_num(v, "position_ms", 0), dm = js_num(v, "duration_ms", 0), sec = ms / 1000.0, d0 = dur();
+    if (sec > 5 && (!dm || !d0 || sec < d0 - 2)) { video_seek(sec); char ft[32]; fmt_time(sec, ft, sizeof ft); snprintf(resumeMsg, sizeof resumeMsg, "%s%s", T("Resuming from "), ft); return; }
+  }
   { float tp = lib_trakt_resume(P.id, P.vid); double d = dur(); if (tp > 0 && d > 0) { double sec = tp * d; /* Trakt's pause, the newer (another app, another device) */
       if (sec > 5 && sec < d - 30) { video_seek(sec); char ft[32]; fmt_time(sec, ft, sizeof ft); snprintf(resumeMsg, sizeof resumeMsg, "%s%s", T("Resuming from "), ft); fprintf(stderr, "[trakt] resumed at Trakt's pause, %.0f %%\n", tp * 100); } return; } }
   cJSON *l = lib_get(P.id); const cJSON *st = js_obj(l, "state"); if (!st) return;
@@ -469,7 +489,7 @@ static void try_resume(void) {
 }
 
 /* ---- subtitles ---- */
-static const char *want_sub(void) { return store_get("subsLang", "eng"); }
+static const char *want_sub(void) { return store_get("subsLang", !strcmp(i18n_lang(), "ar") ? "ara" : "eng"); }
 /* Settings > Subtitles > Subtitle preference: Forced only = a film starts with a forced track in that language (only
    the lines in another language and the signs), or none; All subtitles = as always (PR #50) */
 static int want_forced(void) { return !strcmp(store_get("subsMode", "all"), "forced"); }
@@ -2328,7 +2348,7 @@ void player_cast_track(const char *kind, const char *id, int ms) {
     refresh_tray(3); }
 }
 /* a torrent's peers and speed as the player's corner shows them ("" when none), for a phone's remote */
-const char *player_p2p_line(void) { return P.open && !P.closing && !P.isTrailer && P.isP2p ? P.p2pLine : ""; }
+const char *player_p2p_line(void) { return ""; } /* Peer/speed diagnostics stay out of the playback HUD. */
 /* the info line as the player shows it (resolution, its picture and sound, the size | the sound playing | the subtitles on), for a phone's remote */
 void player_cast_chips(void *arr) { cJSON *a = arr; if (!a || !P.open || P.closing || P.isTrailer) return;
   for (int i = 0; i < P.nchip && i < 8; i++) { cJSON *o = cJSON_CreateObject(); if (P.chip[i].sep) cJSON_AddNumberToObject(o, "sep", 1); else { cJSON_AddStringToObject(o, "t", P.chip[i].t); if (P.chip[i].icon) cJSON_AddStringToObject(o, "i", P.chip[i].icon); if (P.chip[i].bold) cJSON_AddNumberToObject(o, "b", 1); } cJSON_AddItemToArray(a, o); } }
@@ -2442,7 +2462,7 @@ static void info_update(void) {
     if (!kept && same) { int b = P.chip[i].bold; snprintf(P.chip[i].old, sizeof P.chip[i].old, "%s", P.chip[i].t); P.chip[i].oldW = text_width(P.chip[i].old, 24, b ? 800 : 600, b ? 0.5f : 0); P.chip[i].xAt = now; snprintf(P.chip[i].t, sizeof P.chip[i].t, "%s", nw[i].t); }
     else if (!kept) { snprintf(P.chip[i].t, sizeof P.chip[i].t, "%s", nw[i].t); P.chip[i].icon = nw[i].icon; P.chip[i].bold = nw[i].bold; P.chip[i].sep = nw[i].sep; P.chip[i].at = now; P.chip[i].delay = chip_delay(i); P.chip[i].xAt = 0; }
   }
-  P.nchip = n; if (first) chips_in();
+  P.nchip = 0; /* Technical stream badges are intentionally omitted from the player HUD. */ if (first) chips_in();
 }
 /* names and stories of the episodes in the app's language (TMDB), once they are known */
 static void loc_apply(void) {

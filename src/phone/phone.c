@@ -97,10 +97,10 @@ static void hold_tick(void) {
   tween_to(&holdK, holdOn ? 1 : 0, holdOn ? 0.2f : 0.32f, holdOn ? EASE_OUT_BACK : EASE_WEB); tween_tick(&holdK, phDt);
   float v = phDt > 0 ? (F.x - holdLastX) / phDt : 0; holdLastX = F.x; holdVel += ((holdOn ? v : 0) - holdVel) * (phDt * 10 > 1 ? 1 : phDt * 10);
 }
-static int pressStale; static float barTop = 1e9f; /* (last frame's) */
+static int pressStale; static float barTop; /* lower edge of the top navigation band, last frame's */
 /* a press under the bar: only the bar's own things (wholly inside its band) take it */
 static int barDrawing, sheetDrawing, sheetShown; /* (a sheet open: only what it draws reacts to a finger) */ /* (the bar, its row of choices and the mini player being drawn: theirs the presses that start on them) */
-static int under_bar(float x, float y, float h) { (void)x; (void)y; (void)h; if (sheetShown && !sheetDrawing) return 1; return F.y0 >= barTop && !barDrawing && !sheet && !app_overlay; } /* (a sheet open: the page and the bar under it never light up under the finger) */ /* (started on the bar: nothing of the page under it is pressed or held, even a card wholly inside its band) */
+static int under_bar(float x, float y, float h) { (void)x; (void)y; (void)h; if (sheetShown && !sheetDrawing) return 1; return F.y0 <= barTop && !barDrawing && !sheet && !app_overlay; } /* (a sheet open: the page and the bar under it never light up under the finger) */ /* (started on the bar: nothing of the page under it is pressed or held, even a card wholly inside its band) */
 int ph_pressed(float x, float y, float w, float h) { scr_rect(&x, &y, &w, &h); return F.down && !F.drag && !pressStale && !under_bar(x, y, h) && app_now() - F.t0 > 0.03 && inside(F.x0, F.y0, x, y, w, h); }
 int ph_dragging(void) { return F.down && F.drag; }
 static float relX = -1, relY = -1; static double relAt;
@@ -124,7 +124,8 @@ float press_k(float x, float y, float w, float h) { scr_rect(&x, &y, &w, &h);
   return 0;
 }
 /* where the free room ends at the bottom: above the bar (and its row of choices when it shows), above the player's controls */
-float phone_free_bottom(void) { if (player_open()) return SB_H - 210; if (SCR == SCR_LOGIN || !app_splash_done) return SB_H - INS_B - 40; return barTop < SB_H ? barTop : SB_H - INS_B - 130; }
+float phone_free_bottom(void) { if (player_open()) return SB_H - 210; return SB_H - INS_B - 40; }
+float phone_free_top(void) { return barTop > INS_T ? barTop + 24 : INS_T + 130; }
 /* the finger now, for a grid that is held and slid across (Appearance's colours): where, where it touched, whether it
    rests long enough to be a hold (then the page no longer scrolls under it) */
 int ph_finger(float *x, float *y, float *x0, float *y0, int *held) { *x = F.x; *y = F.y; *x0 = F.x0; *y0 = F.y0; *held = F.pressed && !F.drag; return F.down; }
@@ -276,9 +277,7 @@ void choices_open(const char *title, const char **lines, int n, int cur, void (*
 void choices_weights(const int *wt, int n) { for (int i = 0; i < n && i < 14; i++) CH.wt[i] = wt[i]; } /* (after choices_open: each row in its own font) */
 int choices_up(void) { return sheet == &chSheet; }
 
-/* ---- the bar at the bottom: the profile (or Back) on the left, the three places in a glass pill, Search and
-   the TV on the right; a row of the page's own choices floats just above it and slides away while the page
-   scrolls down. Everything a thumb needs is down here. ---- */
+/* ---- the top-centered navigation pill: profile/Back, Home, Library, Downloads, Search and TV. ---- */
 static const Scr TABS[3] = { SCR_HOME, SCR_LIB, SCR_DISC }; /* Home, Library, Downloads (Downloads lives in the screen slot Discover had) */
 /* the pill's four places: Home, Library, Downloads, and Search (a layer over the page it is opened on) */
 extern int ph_search_on(void); extern void ph_search_open(void), ph_search_close(void);
@@ -417,8 +416,8 @@ static void circle_btn(float cx, float cy, float r, const char *icon, uint32_t t
    across by xoff; k its showing (it rises from below). The chosen one's white pill rides a spring and stretches the
    way it goes, as the bar's drop does */
 static void cx_draw(CxRow *C, int slot, float xoff, float k, int live) {
-  if (k <= 0.01f || !C->n) return; float cy = SB_H - INS_B - 18 - 44, r = 44, ry = cy - r - 24 - 72 - phMiniH + (1 - k) * 100, h = 72, tot = cx_tot(C); /* (over the cast mini player when it is there) */
-  int beside = cx_beside(C); if (beside) ry = cy - h / 2 + (1 - k) * 100; /* (a tablet sideways: on the bar's line) */
+  if (k <= 0.01f || !C->n) return; float cy = INS_T + 18 + 44, r = 44, ry = cy + r + 24 + phMiniH + (1 - k) * 100, h = 72, tot = cx_tot(C); /* (over the cast mini player when it is there) */
+  int beside = cx_beside(C); if (beside) ry = cy + r + 24 + phMiniH + (1 - k) * 100; /* (a tablet sideways: on the bar's line) */
   float cs = 1; int fpx = F_BODY; { float vw0 = beside ? cx_avail() : SB_W - 36, t0 = tot - 10; if (t0 > vw0 && t0 * 0.8f <= vw0) { cs = vw0 / t0 * 0.99f; fpx = (int)(F_BODY * cs); tot = 0; for (int i = 0; i < C->n; i++) tot += (text_width(C->l[i], fpx, 700, 0) + 56 * cs + 10) * C->ap[i]; } } /* (a little too many for the width, a tablet upright: a little smaller so all fit; far too many, a phone: they scroll as ever) */
   static Scroll cxS[3]; static int lastSel[3] = { -2, -2, -2 }, cxGo[3]; static float cxTo[3]; Scroll *S = &cxS[slot]; float vw = beside ? cx_avail() : SB_W - 36, over = tot - 10 - vw; S->max = over > 0 ? over : 0;
   { int se = -1; float sx = 18, want = 0; for (int i = 0; i < C->n; i++) { float w = (text_width(C->l[i], fpx, 700, 0) + 56 * cs) * C->ap[i]; if (C->on[i]) { se = i; want = beside ? sx - 18 + w / 2 - vw / 2 : sx + w / 2 - SB_W / 2; } sx += w + 10 * C->ap[i]; }
@@ -449,15 +448,15 @@ int cast_mini_want(void); void cast_mini_content(float x, float y, float w, floa
 void phone_bar_draw(void) { extern float ph_live_full(void); float lf = SCR == SCR_LIVE ? ph_live_full() : 0; if (lf > 0.98f) return; if (lf > 0.002f) gfx_opacity_push(1 - lf); barDrawing = 1; bar_draw_in(); barDrawing = 0; if (lf > 0.002f) gfx_opacity_pop(); } /* (All channels' preview filling the screen: the bar fades with the page) */
 static void bar_draw_in(void) {
   extern int ph_search_on(void); if (SCR == SCR_LOGIN || !app_splash_done || player_open()) { CX.seen = 0; return; }
-  float cy = SB_H - INS_B - 18 - 44, r = 44; /* the bar's middle line: 88 tall, 18 above the gesture bar */
+  float cy = INS_T + 18 + 44, r = 44; /* centered in the top safe area */
   float barW = bar_w(), barX = SB_W / 2 - barW / 2; /* sideways or on a tablet: the bar keeps a phone's width, in the middle */
 #define SLOT(i) (barX + barW / 6.0f * ((i) + 0.5f)) /* six equal places: profile, the four in the pill (Home, Library, Downloads, Search), the TV */
   { int mw = cast_mini_want() && SCR != SCR_SET && !ph_search_on(); /* (not in Settings, not while searching: the bar is the search field then) */ tween_to(&miniT, mw, 0.32f, EASE_WEB); tween_tick(&miniT, phDt); phMiniH = 118 * miniT.v; }
-  float rowR = CX.seen && CX.n && CX.show.to > 0.5f && !cx_beside(&CX) ? 24 + 72 : 0, miniY = cy - r - 12 - 106; /* (the mini player: right over the bar; the page's row of choices over it) */
-  barTop = cy - r - rowR - phMiniH - 8; /* the bar, its row of choices and the mini player: what is under them is never pressed */
-  needGm = 1; glass_grab(flyT.on ? 0 : cy - r - 24 - 72 - phMiniH - 24); /* the page under the bar and its row of choices, before anything is drawn over it (a bubble flying: the whole page, for its glass all the way) */
+  float rowR = CX.seen && CX.n && CX.show.to > 0.5f && !cx_beside(&CX) ? 24 + 72 : 0, miniY = cy + r + 12; /* mini player and page choices flow below the pill */
+  barTop = cy + r + rowR + phMiniH + 8; /* top navigation, mini player and choices: shield their full band */
+  needGm = 1; glass_grab(0); /* sample the full page beneath the top-centered glass pill */
   { void pplat_tilt(float *x, float *y); float tx, ty; pplat_tilt(&tx, &ty); static float lx, ly; float wx = tx * 35, wy = ty * 35; lx += (wx - lx) * clampf(phDt * 6, 0, 1); ly += (wy - ly) * clampf(phDt * 6, 0, 1); gfx_liquid_light(lx, ly); } /* the light moves as the phone tilts */
-  gfx_rrect_v(0, cy - 40, SB_W, SB_H - cy + 40, 0, col_alpha(PAGE | 0xff000000u, 0), col_alpha(PAGE | 0xff000000u, 0.5f)); /* a little shade under the bar */
+  gfx_rrect_v(0, 0, SB_W, barTop + 24, 0, col_alpha(PAGE | 0xff000000u, 0.42f), col_alpha(PAGE | 0xff000000u, 0)); /* a subtle fade below the top navigation */
   /* the row of choices */
   /* the row belongs to its page: swiped across, it goes with it and the next page's comes in from the other side (as
      their pages do); landing, the one there stays; a page entered otherwise brings its row up; a page with none lets
@@ -551,7 +550,7 @@ void phone_tick(float dt) { phDt = dt; frameNo++;
     if (from && frameNo % 6 == 0) { int h = pplat_held(); if (h == 0) { seenSide = 1; upAt = 0; } else if (h == 1 && seenSide) { if (!upAt) upAt = app_now(); else if (app_now() - upAt > 0.35) { upAt = 0; player_to_preview(1); } } else upAt = 0; } } /* a channel from the page's preview, the phone turned upright again: back into the preview */
   { int pplat_fullscreen_on(void); void pplat_fullscreen(int on); extern int player_open(void); static double offAt; if (pplat_fullscreen_on() && !player_open()) { if (!offAt) offAt = app_now(); else if (app_now() - offAt > 0.4) { fprintf(stderr, "[phone] sideways with no player: upright again\n"); pplat_fullscreen(0); offAt = 0; } } else offAt = 0; } /* (sideways belongs to the player alone: whatever asked for it, no player, the phone turns freely again) */
   { static int told; if (sb_session_lost() && !told && app_splash_done && !player_open() && SCR != SCR_LOGIN) { told = 1; toast(T("Signed out on this phone: sign in again"), 3200, NULL); app_go(SCR_LOGIN, NULL, 0); } if (!sb_session_lost()) told = 0; } /* (the account dropped this sign-in: Continue Watching and the Library stop syncing until it is back) */ { int pplat_take_open_downloads(void); static int want; if (frameNo % 4 == 0 && pplat_take_open_downloads()) want = 1; if (want && app_splash_done && !player_open()) { want = 0; ph_sheet_close(); if (SCR != SCR_DISC) app_go(SCR_DISC, NULL, 1); } } /* (its notification tapped: straight to Downloads, as soon as the app is up) */ { void ph_leave_tick(void); ph_leave_tick(); } if (frameNo == 3) { void pplat_first_frame(void); pplat_first_frame(); } /* (two frames of its own drawn: Android's cover over them can go) */ ph_dl_tick(); back_tick(); tab_tick(); hold_tick(); { extern float app_hold_progress(void); float hp = app_hold_progress(); if (hp > 0) ph_hold_feel(hp); } /* a card held: its ticks */ cur ^= 1; nDrag[cur] = 0; dragFloor[cur] = 0; nScrub[cur] = 0;
-  if (F.down && !F.drag && !F.pressed && !F.caught && app_now() - F.t0 >= HOLD_AFTER) { F.pressed = 1; if (sheet || app_overlay || F.y0 < barTop) app_pointer_button(1, F.x, F.y); } /* (on the bar, its row of choices or the mini player: the page under them never held) */ /* a finger that rests: OK held */
+  if (F.down && !F.drag && !F.pressed && !F.caught && app_now() - F.t0 >= HOLD_AFTER) { F.pressed = 1; if (sheet || app_overlay || F.y0 > barTop) app_pointer_button(1, F.x, F.y); } /* (on the bar, its row of choices or the mini player: the page under them never held) */ /* a finger that rests: OK held */
   if (app_now() - insAt < 1.5 || !(frameNo % 30)) { static int n; if (!(n++ % 6) || app_now() - insAt >= 1.5) { float t, b; pplat_insets(&t, &b); INS_T = t / pxPerUnit; INS_B = b / pxPerUnit; } } /* after a turn the system bars come back a moment later */
   keyboard_tick(); cast_pump();
 }

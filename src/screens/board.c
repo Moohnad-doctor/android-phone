@@ -106,17 +106,21 @@ static void slide_row(Row *r) {
   if (r->popCol != r->col) { r->popCol = r->col; focus_pop(&r->pop); } /* the floating copy pops on every move */
 }
 /* ---- Discover's filters: a type, a genre, a decade (the rows asked again with them; the decade sorts the answers) ---- */
-static struct { char type[16], genre[48]; int cat, decade; /* the type, which of its catalogs, its genre (as the official Discover); decade: 0 (unused now) */
-  int open, which, idx, n, top; float listW, roomMax, ow[200], ox[200], rx0, rroom, rfull, hx, hw, sxd; Tween wt[3]; double restAt; Tween sx; int hFrom, hTo; Tween hk, ha; char opt[200][96]; Tween a; float cx[4], cw[4], y; int nchip; } FL;
+static struct { char type[16], genre[48]; int cat, decade, sort; /* the type, which of its catalogs, its genre (as the official Discover); decade: 0 (unused now) */
+  int open, which, idx, n, top; float listW, roomMax, ow[200], ox[200], rx0, rroom, rfull, hx, hw, sxd; Tween wt[5]; double restAt; Tween sx; int hFrom, hTo; Tween hk, ha; char opt[200][96]; Tween a; float cx[5], cw[5], y; int nchip; } FL;
 static int item_year(const Item *it) { for (const char *p = it->metaLine; *p; p++) if (p[0] >= '1' && p[0] <= '2' && p[1] >= '0' && p[1] <= '9' && p[2] >= '0' && p[2] <= '9' && p[3] >= '0' && p[3] <= '9') { int y = atoi(p); if (y >= 1890 && y <= 2100) return y; } return 0; }
-static int year_ok(const Item *it) { if (!FL.decade) return 1; int y = item_year(it); if (!y) return 0; return FL.decade == 1 ? y < 1980 : y >= FL.decade && y < FL.decade + 10; }
+static int year_ok(const Item *it) { if (!FL.decade) return 1; int y = item_year(it); if (!y) return 0; if (FL.decade == 1) return y < 1980; if (FL.decade == 2020) return y >= 2020 && y <= 2023; return y == FL.decade; }
 static void year_keep(ItemList *l) { if (!FL.decade || !l) return; int k = 0; for (int i = 0; i < l->n; i++) if (year_ok(&l->items[i])) l->items[k++] = l->items[i]; l->n = k; }
+static double item_rating(const Item *it) { const cJSON *m = sb_meta_cached(it->type, it->id); return js_num(m, "imdbRating", js_num(m, "rating", 0)); }
+static int sort_mode;
+static int item_cmp(const void *aa, const void *bb) { const Item *a = aa, *b = bb; double x = sort_mode == 1 ? a->airAt : sort_mode == 2 ? item_year(a) : item_rating(a), y = sort_mode == 1 ? b->airAt : sort_mode == 2 ? item_year(b) : item_rating(b); return x < y ? 1 : x > y ? -1 : 0; }
+static void sort_items(ItemList *l) { if (!l || l->n < 2 || FL.sort < 1 || FL.sort > 3) return; sort_mode = FL.sort; qsort(l->items, (size_t)l->n, sizeof(Item), item_cmp); }
 /* a catalog answer finds its row through a packed token (board, row, generation): nothing to free */
 static void *tok(Board *b, int row) { return (void *)(uintptr_t)(((uintptr_t)(b - boards) << 31) | ((uintptr_t)(b->gen & 0xffffff) << 7) | (uintptr_t)row); }
 static void on_catalog(ItemList *l, int cached, void *ud) {
   (void)cached; uintptr_t t = (uintptr_t)ud; Board *b = &boards[(t >> 31) & 1]; int row = t & 127; unsigned gen = (t >> 7) & 0xffffff;
   if ((b->gen & 0xffffff) != gen || row >= b->n) { itemlist_free(l); return; }
-  int got = l->n; if (b->kind == 1) year_keep(l); /* (Discover's decade) */
+  int got = l->n; if (b->kind == 1) { year_keep(l); sort_items(l); } /* (Discover's decade) */
   { Row *r0 = &b->rows[row]; if (!got && l->total < 0 && r0->hasDef && r0->retries < 3) { static const double W[3] = { 8, 20, 45 }; r0->retryAt = app_now() + W[r0->retries]; r0->retries++; itemlist_free(l); /* no answer (an addon still making the list, busy, a blip): asked again in 8, 20 and 45 s before the row is left out */
       fprintf(stderr, "[home] %s: no answer, asked again in %.0f s\n", r0->title, W[r0->retries - 1]); return; } }
   Row *r = &b->rows[row]; row_clear(r); r->items = *l; free(l); r->locAt = 0;
@@ -183,7 +187,7 @@ static void disc_grid(Board *b) {
 static void on_disc(ItemList *l, int cached, void *ud) {
   (void)cached; int mi; if (!dud_ok(ud, &mi)) { itemlist_free(l); return; }
   if (DS.nm == 1) { /* one catalog: its answer is the listing (its fresh answer replaces its kept one), as before */
-    itemlist_clear(&DS.all); itemlist_clear(&DS.part[0]); DS.used[0] = 0; DS.all = *l; free(l); DS.has[0] = 1; DS.mSkip[0] = DS.all.total > DS.all.n ? DS.all.total : DS.all.n; DS.mMore[0] = DS.m[0].skip && DS.all.n > 0; DS.more = DS.mMore[0]; DS.paging = 0;
+    itemlist_clear(&DS.all); itemlist_clear(&DS.part[0]); DS.used[0] = 0; DS.all = *l; free(l); year_keep(&DS.all); sort_items(&DS.all); DS.has[0] = 1; DS.mSkip[0] = DS.all.total > DS.all.n ? DS.all.total : DS.all.n; DS.mMore[0] = DS.m[0].skip && DS.all.n > 0; DS.more = DS.mMore[0]; DS.paging = 0;
     Board *b = &boards[1]; disc_grid(b); if (cur() == b) hero_soon(b, 0); return; }
   if (DS.has[mi] && DS.used[mi]) { itemlist_free(l); return; } /* (several: a fresh answer after the kept one is used only if nothing of it shows yet) */
   itemlist_clear(&DS.part[mi]); DS.part[mi] = *l; free(l); DS.has[mi] = 1; DS.mSkip[mi] = DS.part[mi].total > DS.part[mi].n ? DS.part[mi].total : DS.part[mi].n; DS.mMore[mi] = DS.m[mi].skip && DS.part[mi].n > 0;
@@ -202,7 +206,7 @@ static void on_disc_page1(ItemList *l, int more, void *ud) { /* one catalog: its
   int mi; if (!dud_ok(ud, &mi)) { itemlist_free(l); return; } DS.paging = 0; if (!l) { DS.pageAt = app_now() + 10; return; }
   int got = l->n, add = 0; Item *g = realloc(DS.all.items, (size_t)(DS.all.n + l->n + 1) * sizeof(Item));
   if (g) { DS.all.items = g; for (int i = 0; i < l->n; i++) { int dup = 0; for (int k = 0; k < DS.all.n && !dup; k++) dup = !strcmp(DS.all.items[k].id, l->items[i].id); if (!dup && l->items[i].id[0]) { DS.all.items[DS.all.n++] = l->items[i]; add++; } } }
-  itemlist_free(l); DS.mSkip[0] += got; if (!got || !add || !more || DS.all.n >= (MAXROWS - 2) * grid_n()) DS.more = 0;
+  itemlist_free(l); year_keep(&DS.all); sort_items(&DS.all); DS.mSkip[0] += got; if (!got || !add || !more || DS.all.n >= (MAXROWS - 2) * grid_n()) DS.more = 0;
   disc_grid(&boards[1]);
 }
 /* the members' titles into the listing, in turn, each once: only as far as every member that still has titles (or
@@ -215,6 +219,7 @@ static void disc_merge(void) {
     for (int i = 0; i < DS.nm; i++) { if (DS.used[i] >= DS.part[i].n) continue; Item *it = &DS.part[i].items[DS.used[i]++]; if (!it->id[0]) continue;
       int dup = 0; for (int k = 0; k < DS.all.n && !dup; k++) dup = !strcmp(DS.all.items[k].id, it->id); if (dup) continue;
       Item *g = realloc(DS.all.items, (size_t)(DS.all.n + 1) * sizeof(Item)); if (!g) break; DS.all.items = g; DS.all.items[DS.all.n++] = *it; add++; } }
+  year_keep(&DS.all); sort_items(&DS.all);
   int more = 0; for (int i = 0; i < DS.nm; i++) more |= DS.mMore[i]; DS.more = more && DS.all.n < (MAXROWS - 2) * grid_n();
   if (add || !DS.more) { Board *b = &boards[1]; int first = DS.all.n == add; disc_grid(b); if (first && cur() == b) hero_soon(b, 0); }
 }
@@ -610,6 +615,7 @@ static void board_leave(void) {
 }
 static void enter_home(const void *p) { (void)p; board_leave(); board_enter_k(&boards[0]); }
 static void enter_disc(const void *p) { (void)p; board_leave(); board_enter_k(&boards[1]); }
+void board_open_category(const char *type, const char *genre) { snprintf(FL.type, sizeof FL.type, "%s", type && *type ? type : "movie"); snprintf(FL.genre, sizeof FL.genre, "%s", genre ? genre : ""); FL.cat = 0; FL.decade = 0; FL.sort = 0; FL.open = 0; boards[1].built = 0; app_go(SCR_DISC, NULL, 0); }
 /* the next page when the focus is a few cards from the row's end (the official apps load a catalog's pages the same
    way, with skip); a page that brings nothing new, a 404 or hasMore false ends it; a failed one is asked again later */
 static void on_page(ItemList *l, int more, void *ud) {
@@ -617,7 +623,7 @@ static void on_page(ItemList *l, int more, void *ud) {
   if ((b->gen & 0xffffff) != gen || row >= b->n) { itemlist_free(l); return; }
   Row *r = &b->rows[row]; if (!r->paging) { itemlist_free(l); return; } r->paging = 0; /* the row was filled again meanwhile */
   if (!l) { r->pageAt = app_now() + 10; return; }
-  int got = l->n; if (b->kind == 1) year_keep(l);
+  int got = l->n; if (b->kind == 1) { year_keep(l); sort_items(l); }
   int add = 0; Item *grow = realloc(r->items.items, (size_t)(r->items.n + l->n + 1) * sizeof(Item));
   if (grow) { r->items.items = grow;
     for (int i = 0; i < l->n; i++) { int dup = 0; for (int k = 0; k < r->items.n && !dup; k++) dup = !strcmp(r->items.items[k].id, l->items[i].id); if (!dup && l->items[i].id[0]) r->items.items[r->items.n++] = l->items[i], add++; } }
@@ -763,14 +769,16 @@ static int curOpt; static char optType[16][16]; /* the list's choice in use; the
 static int disc_genres(char (*out)[48], int max, int *req) { return disc_cat_genres(out, max, req); }
 static const char *type_txt(const char *t) { return !strcmp(t, "*") ? T("All") : !strcmp(t, "movie") ? T("Films") : !strcmp(t, "series") ? T("Series") : t; }
 static const char *chip_txt(int i, char *buf, size_t cap) {
-  if (FL.open && FL.which == i && FL.idx >= 0 && FL.idx < FL.n) { /* open: the choice the highlight is on (a catalog without its addon) */
+  if (FL.open && FL.which == i && FL.idx >= 0 && FL.idx < FL.n) {
     if (i == 1) { static CatalogDef cs[64]; int nc = disc_cats(cs, NULL, 64); if (FL.idx < nc) { snprintf(buf, cap, "%s", cs[FL.idx].title); return buf; } }
     return FL.opt[FL.idx]; }
   if (i == 0) return type_txt(FL.type[0] ? FL.type : "movie");
   if (i == 1) { static CatalogDef cs[64]; int nc = disc_cats(cs, NULL, 64); if (!nc) return T("Catalog"); snprintf(buf, cap, "%s", cs[FL.cat < nc ? FL.cat : 0].title); return buf; }
-  return FL.genre[0] ? FL.genre : T("All genres");
+  if (i == 2) return FL.genre[0] ? FL.genre : T("All genres");
+  if (i == 3) return FL.decade == 1 ? T("Classic") : FL.decade == 2020 ? "2020–2023" : FL.decade ? (FL.decade == 2026 ? "2026" : FL.decade == 2025 ? "2025" : "2024") : T("All years");
+  return FL.sort == 1 ? T("Now playing") : FL.sort == 2 ? T("Newest airing") : FL.sort == 3 ? T("Highest rated") : T("Most popular");
 }
-static int filt_chips(void) { char g[2][48]; int req; return disc_genres(g, 2, &req) > 0 ? 3 : 2; }
+static int filt_chips(void) { return 5; }
 static void filt_chip_focus(int r, int c) { Board *b = cur(); if (!b || r >= b->n) return; if (FL.open) { if (c == FL.which) FL.idx = -1; return; } /* (open: the pointer on its pill puts the highlight back on it) */ topNav.active = 0; if (spotOn(b)) { b->featOn = 0; b->featAt = 0; } b->rowIdx = r; b->rows[r].col = c; hero_soon(b, 150); }
 #define FL_PAD 12.0f        /* an open list: its gap from its pill */
 #define OPT_TW 520.0f       /* a choice's words at most this wide (an ellipsis after) */
@@ -793,7 +801,7 @@ static void hl_rect(int c, float *x, float *w) {
 }
 static float hl_over(float hx, float hw, float x, float w) { float l = hx > x ? hx : x, r = hx + hw < x + w ? hx + hw : x + w; return w > 0 && r > l ? (r - l) / w : 0; } /* how much of a box the highlight covers */
 static void filt_draw(Board *b, Row *r, int ri, float y, float rowA, int active) {
-  int rtl = app_rtl(), n = filt_chips(); if (r->col >= n) r->col = n - 1; float h = 56, cy = y + 24; char buf[3][96]; const char *t[3]; float tw[3], w[3], tot = 0;
+  int rtl = app_rtl(), n = filt_chips(); if (r->col >= n) r->col = n - 1; float h = 56, cy = y + 24; char buf[5][96]; const char *t[5]; float tw[5], w[5], tot = 0;
   gfx_opacity_push(rowA); FL.y = cy; FL.nchip = n;
   for (int i = 0; i < n; i++) { t[i] = chip_txt(i, buf[i], sizeof buf[i]); tw[i] = text_width(t[i], 24, 700, 0); float ww = 26 + tw[i] + 10 + 18 + 26;
     if (FL.wt[i].v < 1) tween_set(&FL.wt[i], ww); else if (fabsf(FL.wt[i].to - ww) > 0.5f) tween_to(&FL.wt[i], ww, 0.24f, EASE_ROW); tween_tick(&FL.wt[i], app_dt()); w[i] = FL.wt[i].v; /* (its words changed: it widens or narrows smoothly) */
@@ -813,9 +821,9 @@ static void filt_draw(Board *b, Row *r, int ri, float y, float rowA, int active)
   float hx = 0, hw = 0, hh = h, ha = FL.ha.v; { float ax, aw, bx2, bw2; hl_rect(FL.hFrom, &ax, &aw); hl_rect(FL.hTo, &bx2, &bw2); float g = FL.hk.v; if (aw <= 0) { ax = bx2; aw = bw2; } hx = ax + (bx2 - ax) * g; hw = aw + (bw2 - aw) * g;
     float ah = FL.hFrom >= 100 ? OPT_H : h, bh = FL.hTo >= 100 ? OPT_H : h; hh = ah + (bh - ah) * g; } /* (its height too: a choice is smaller than a pill) */
   /* the pills (quiet), the highlight over them, then their words (taking the highlight's colours where it lies) */
-  for (int i = 0; i < n; i++) { int set = i == 2 && FL.genre[0]; float px = FL.cx[i]; gfx_rrect(px, cy, w[i], h, h / 2, WHITE_A(active ? 24 : 18)); gfx_ring(px, cy, w[i], h, h / 2, set ? 2 : 1, set ? col_alpha(ACC2, 0.9f) : WHITE_A(36)); }
+  for (int i = 0; i < n; i++) { int set = (i == 2 && FL.genre[0]) || (i == 3 && FL.decade) || (i == 4 && FL.sort); float px = FL.cx[i]; gfx_rrect(px, cy, w[i], h, h / 2, WHITE_A(active ? 24 : 18)); gfx_ring(px, cy, w[i], h, h / 2, set ? 2 : 1, set ? col_alpha(ACC2, 0.9f) : WHITE_A(36)); }
   if (ha > 0.001f && hw > 1) { float nx = nudge_x(&r->nudge); int inLine = FL.hFrom >= 100 && FL.hTo >= 100 && FL.rroom > 1; if (inLine) gfx_clip_push(FL.rx0, cy - 8, FL.rroom, h + 16); lglass_accent(hx + nx, cy + (h - hh) / 2, hw, hh, hh / 2, ha); if (inLine) gfx_clip_pop(); } /* (along the choices: inside their room) */
-  for (int i = 0; i < n; i++) { int set = i == 2 && FL.genre[0]; float px = FL.cx[i], u = hl_over(hx, hw, px, w[i]) * ha;
+  for (int i = 0; i < n; i++) { int set = (i == 2 && FL.genre[0]) || (i == 3 && FL.decade) || (i == 4 && FL.sort); float px = FL.cx[i], u = hl_over(hx, hw, px, w[i]) * ha;
     uint32_t tc = col_mix(WHITE_A(set ? 255 : 225), ACC_FG, u); float tx = rtl ? px + w[i] - 26 - tw[i] : px + 26;
     gfx_clip_push(px + 12, cy, w[i] - 24 - 18, h); text_draw(t[i], tx, cy + h / 2 - text_line_height(24) / 2, 24, 700, tc, 0, 0, ALIGN_LEFT); gfx_clip_pop(); /* (inside its pill while it changes size) */
     float ax = rtl ? px + 26 - 2 : px + w[i] - 26 - 18 + 2, ay = cy + h / 2 - 9, rk = i == FL.which ? FL.a.v : 0;
@@ -832,21 +840,25 @@ static void filt_open(int which) {
     for (int i = 0; i < k && i < 200; i++) { snprintf(FL.opt[i], sizeof FL.opt[i], "%s", type_txt(optType[i])); if (!strcmp(optType[i], FL.type)) curOpt = i; } FL.n = k; }
   else if (which == 1) { static CatalogDef cs[64]; static char an[64][64]; int nc = disc_cats(cs, an, 64);
     for (int i = 0; i < nc && i < 200; i++) snprintf(FL.opt[i], sizeof FL.opt[i], "%s%s%s", cs[i].title, an[i][0] ? " · " : "", an[i]); FL.n = nc; curOpt = FL.cat < nc ? FL.cat : 0; }
-  else { int req, k = 0; static char g[199][48]; int ng = disc_genres(g, 199, &req); if (!req) snprintf(FL.opt[k++], sizeof FL.opt[k], "%s", T("All genres"));
+  else if (which == 2) { int req, k = 0; static char g[199][48]; int ng = disc_genres(g, 199, &req); if (!req) { snprintf(FL.opt[k], sizeof FL.opt[k], "%s", T("All genres")); k++; }
     for (int i = 0; i < ng && k < 200; i++) { snprintf(FL.opt[k], sizeof FL.opt[k], "%s", g[i]); if (!strcmp(g[i], FL.genre)) curOpt = k; k++; } FL.n = k; }
+  else if (which == 3) { const char *years[] = { "All years", "2026", "2025", "2024", "2020–2023", "Classic" }; int vals[] = { 0, 2026, 2025, 2024, 2020, 1 }; for (int i = 0; i < 6; i++) { snprintf(FL.opt[i], sizeof FL.opt[i], "%s", T(years[i])); if (FL.decade == vals[i]) curOpt = i; } FL.n = 6; }
+  else { const char *sorts[] = { "Most popular", "Now playing", "Newest airing", "Highest rated" }; for (int i = 0; i < 4; i++) { snprintf(FL.opt[i], sizeof FL.opt[i], "%s", T(sorts[i])); if (FL.sort == i) curOpt = i; } FL.n = 4; }
   FL.idx = curOpt; if (FL.idx > 3) FL.top = FL.idx - 3; FL.listW = 0; for (int i = 0; i < FL.n; i++) { { float tw = text_width(FL.opt[i], OPT_PX, 700, 0); FL.ow[i] = (tw < OPT_TW ? tw : OPT_TW) + 2 * OPT_PAD; } /* (as drawn: bold, a long name cut at OPT_TW) */ FL.ox[i] = FL.listW; FL.listW += FL.ow[i] + (i + 1 < FL.n ? 6 : 0); } tween_set(&FL.sx, 0); /* (the choices in one line, measured once) */
   FL.open = 1; tween_set(&FL.a, 0); tween_to(&FL.a, 1, 0.32f, EASE_CSS_EASEOUT); sound_focus(); /* its choices open out in the line, the pills after it move aside */
 }
 static void filt_close(void) { if (!FL.open) return; FL.open = 0; tween_to(&FL.a, 0, 0.26f, EASE_IN_OUT); } /* its choices go back into the pill, the pills after it close the gap */
 static void filt_apply(Board *b) { /* the listing asked again with the strip's choice; the focus stays on the strip, on the same pill */
-  int col = FL.which < 3 ? FL.which : 0; load_catalog_rows(b, 1, 0); b->rowIdx = 0; if (b->n && b->rows[0].filt) b->rows[0].col = col; b->featOn = 0; timer_start(&b->fade, 0.5f); for (int i = 0; i < b->n; i++) { slide_row(&b->rows[i]); tween_set(&b->rows[i].off, b->rows[i].off.to); }
+  int col = FL.which < 5 ? FL.which : 0; load_catalog_rows(b, 1, 0); b->rowIdx = 0; if (b->n && b->rows[0].filt) b->rows[0].col = col; b->featOn = 0; timer_start(&b->fade, 0.5f); for (int i = 0; i < b->n; i++) { slide_row(&b->rows[i]); tween_set(&b->rows[i].off, b->rows[i].off.to); }
 }
 static void genre_default(void) { int req; char g[1][48]; FL.genre[0] = 0; if (disc_genres(g, 1, &req) > 0 && req) snprintf(FL.genre, sizeof FL.genre, "%s", g[0]); } /* (a genre the catalog needs: its first, as the official app) */
 static int filt_set(int i) { /* the choice i of the open pill taken (the official rules: a type resets its catalog and genre, a catalog its genre); 1 when it changed */
   if (i < 0 || i >= FL.n) return 0; int ch = 0;
-  if (FL.which == 0) { if (i < 16 && strcmp(optType[i], FL.type)) { snprintf(FL.type, sizeof FL.type, "%s", optType[i]); FL.cat = 0; genre_default(); ch = 1; } }
+  if (FL.which == 0) { if (i < 16 && strcmp(optType[i], FL.type)) { snprintf(FL.type, sizeof FL.type, "%s", optType[i]); FL.cat = 0; FL.decade = 0; FL.sort = 0; genre_default(); ch = 1; } }
   else if (FL.which == 1) { if (i != FL.cat) { FL.cat = i; genre_default(); ch = 1; } }
-  else { int req; char g[1][48]; disc_genres(g, 1, &req); const char *v = !req && i == 0 ? "" : FL.opt[i]; if (strcmp(v, FL.genre)) { snprintf(FL.genre, sizeof FL.genre, "%s", v); ch = 1; } }
+  else if (FL.which == 2) { int req; char g[1][48]; disc_genres(g, 1, &req); const char *v = !req && i == 0 ? "" : FL.opt[i]; if (strcmp(v, FL.genre)) { snprintf(FL.genre, sizeof FL.genre, "%s", v); ch = 1; } }
+  else if (FL.which == 3) { static const int vals[] = { 0, 2026, 2025, 2024, 2020, 1 }; if (i < 6 && FL.decade != vals[i]) { FL.decade = vals[i]; ch = 1; } }
+  else if (FL.which == 4) { if (i < 4 && FL.sort != i) { FL.sort = i; ch = 1; } }
   if (ch) curOpt = i; return ch;
 }
 static void filt_choose(Board *b) {

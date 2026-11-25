@@ -161,7 +161,7 @@ static long ram_free_now(const char *root) { long m = plat_mem_free_mb(); long t
 
 /* the window a film wants: about 40 s in front at its bitrate, the same again for the trims' slack, plus head, tail
    and a short look-behind (see the engine's window split) */
-static long want_window(double bps) { if (bps <= 0) bps = 1 * MB; long w = (long)(2.2 * bps * 40 / MB) + 32; return w; }
+static long want_window(double bps) { if (bps <= 0) bps = 1 * MB; long w = (long)(2.6 * bps * 55 / MB) + 48; return w; }
 static long want_for(const Prof *P, double bps, uint64_t size) { /* a USB drive: the whole film (seeks back and forth stay on it) */
   if (P->loc == LOC_USB) return size ? (long)(size / MB) + 64 : P->wmax; return want_window(bps); }
 static long clamp_in(const Prof *P, long want, long room) {
@@ -269,6 +269,23 @@ static void apply_memory_settings(void) {
     if (E->setting(S[i].n, v)) nb += snprintf(bad + nb, sizeof bad - nb > 0 ? sizeof bad - nb : 0, " %s", S[i].n); }
   if (bad[0]) fprintf(stderr, "[p2p] settings not taken:%s\n", bad);
   apply_connections(0);
+}
+/* Offline fetches keep the whole file (NUVIO_ENGINE_STREAM_KEEP_FILE), so use a
+   higher-throughput peer/request profile while at least one fetch is active. The
+   streaming window remains enabled for Play and keeps its own playhead priorities. */
+static int downloadProfile;
+static void apply_download_settings(void) {
+  static const struct { const char *n; int v[3]; } D[] = {
+    { "connections_limit",            { 100, 180, 300 } },
+    { "connection_speed",             {  25,  40,  60 } },
+    { "max_peerlist_size",            { 800, 1600, 3000 } },
+    { "max_paused_peerlist_size",     { 100,  400,  800 } },
+    { "num_want",                     { 100,  200,  300 } },
+    { "max_queued_disk_bytes",        { 1048576, 2097152, 4194304 } },
+    { "max_allowed_in_request_queue", { 128,  500, 1000 } },
+    { "unchoke_slots_limit",          {   6,   10,   16 } }
+  };
+  for (unsigned i = 0; i < sizeof D / sizeof *D; i++) E->setting(D[i].n, D[i].v[PF.tier]);
 }
 static uint64_t mem_cache_bytes(void) { return (PF.tier == 0 ? 4 : PF.tier == 1 ? 8 : 16) * MB; }
 static uint64_t upload_bps(void) { return (PF.tier == 0 ? 256 : PF.tier == 1 ? 512 : 1024) * 1024ull; }
@@ -608,6 +625,7 @@ void p2p_pump(void) {
     if (A.ih[0]) watch_room(t); }
   watch_usb(t);
   fx_pump(es); es = ENG();
+  if (E && es == ENG_ON) { int downloading = fx_any(); if (downloading != downloadProfile) { downloadProfile = downloading; if (downloading) apply_download_settings(); else apply_memory_settings(); } }
   if (!R.on) { if (E && es == ENG_ON && !A.ih[0] && !fx_any() && idleSince > 0 && t - idleSince > idle_limit()) { ENG_SET(ENG_STOPPING); pthread_t th; if (!pthread_create(&th, NULL, engine_stop, NULL)) pthread_detach(th); else ENG_SET(ENG_ON); idleSince = 0; fprintf(stderr, "[p2p] engine stopped after %.0f idle seconds\n", idle_limit()); } return; }
   if (es == ENG_OFF) { if (ensure_engine()) { fail(T("Couldn’t start the torrent engine")); return; } }
   if (es == ENG_FAILED) { fprintf(stderr, "[p2p] engine failed: %s\n", engErr); ENG_SET(ENG_OFF); fail(T("Couldn’t start the torrent engine")); return; }

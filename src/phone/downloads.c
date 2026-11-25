@@ -13,6 +13,7 @@
 #include <strings.h>
 #include "phone/phone.h"
 #include "core/store.h"
+#include "ui/img.h"
 #include "core/net.h"
 #include "core/json.h"
 #include "core/i18n.h"
@@ -247,7 +248,7 @@ static void fmt_left(long long left, char *eta, size_t cap) { char m[16]; if (le
    line each; the show's logo on its tile; once a second; gone when nothing downloads any more */
 static double notifyAt; static void notify_now(void) { notifyAt = -9; } /* (a download just added: said at once, "finding a stream" too) */
 static void notify_tick(void) { if (app_now() - notifyAt < 1.0) return; notifyAt = app_now();
-  int run = 0, wait = 0, one = -1, act = 0; long long got = 0, size = 0, spd = 0; char lines[1200] = ""; size_t L = 0;
+  int run = 0, one = -1, act = 0; long long got = 0, size = 0, spd = 0; char lines[1200] = ""; size_t L = 0;
   for (int i = 0; i < nd; i++) { Dl *d = &D[i]; int on = d->state == DL_RUNNING, w = d->state == DL_QUEUED || d->state == DL_CHOOSING; if (!on && !w) continue; act++; if (one < 0 || (on && D[one].state != DL_RUNNING)) one = i;
     if (on) { run++; got += d->got; size += d->size; spd += d->speed; }
     if (L < sizeof lines - 200) { char ep[32]; ep_short(d, ep, sizeof ep); char st[96]; if (on && d->size > 0) { char a1[24], b1[24]; if (d->size >= 1000000000) { snprintf(a1, sizeof a1, "%.1f", d->got / 1e9); snprintf(b1, sizeof b1, "%.1f GB", d->size / 1e9); } else { snprintf(a1, sizeof a1, "%.0f", d->got / 1e6); snprintf(b1, sizeof b1, "%.0f MB", d->size / 1e6); } snprintf(st, sizeof st, "%d%%  (%s / %s)", (int)(100.0 * d->got / d->size), a1, b1); } else snprintf(st, sizeof st, "%s", d->state == DL_CHOOSING ? T("Finding a stream") : T("Waiting"));
@@ -331,6 +332,18 @@ int ph_dl_auto(void) { return store_bool("dlAuto", 1); } /* downloads choose the
 int ph_dl_done_any(const char *id) { load(); for (int i = 0; i < nd; i++) if (D[i].state == DL_DONE && !strcmp(D[i].id, id)) return 1; return 0; } /* (a poster's mark) */
 const Dl *ph_dl_find(const char *id, const char *vid) { load(); int i = find(id, vid); return i >= 0 ? &D[i] : NULL; }
 int ph_dl_state(const char *id, const char *vid, float *prog) { load(); int i = find(id, vid); if (i < 0) return -1; if (prog) *prog = D[i].size > 0 ? (float)((double)D[i].got / D[i].size) : 0; return D[i].state; }
+/* Playback positions are stored in milliseconds under the same canonical item + episode key
+   used by the download itself. The UI consumes seconds for readable remaining-time labels. */
+int ph_dl_watch_info(const Dl *d, double *position, double *duration) {
+  if (!d) return 0;
+  char pk[240], dk[240];
+  snprintf(pk, sizeof pk, "watch.%s.%s.position_ms", d->id, d->vid);
+  snprintf(dk, sizeof dk, "watch.%s.%s.duration_ms", d->id, d->vid);
+  double p = store_num(pk, 0), du = store_num(dk, 0);
+  if (position) *position = p / 1000.0;
+  if (duration) *duration = du / 1000.0;
+  return du > 0;
+}
 static void choices_cb(int i) { asking = 0; for (int j = 0; j < nd; j++) if (D[j].wifi == 2) D[j].wifi = i == 1 ? 1 : 0; save(); if (i == 1) toast(T("They start once you\xe2\x80\x99re on Wi-Fi"), 2200, NULL); }
 static void ask_data(void) { extern int player_open(void); if (store_bool("dlWifi", 0) || wifi_now()) return; if (player_open()) { for (int j = 0; j < nd; j++) if (D[j].wifi == 2) D[j].wifi = 0; toast(T("Downloading on mobile data"), 2200, NULL); return; } /* (in the player a question would be under the film) */ if (asking) return; asking = 1; askAt = app_now();
   const char *l[2] = { T("Download now on mobile data"), T("Wait for Wi-Fi") }; choices_open(T("You\xe2\x80\x99re not on Wi-Fi"), l, 2, 0, choices_cb); }
@@ -350,7 +363,7 @@ static int dl_add_(const Item *it, const char *vid, const char *ep, const Stream
   int i = find(it->id, vid); if (i >= 0 && D[i].state == DL_DONE) { if (!quiet) toast(T("Already downloaded"), 1600, NULL); return 0; }
   if (i < 0) { if (nd >= MAXD) { toast(T("Too many downloads: remove some first"), 2200, NULL); return 0; } i = nd++; }
   Dl *d = &D[i]; memset(d, 0, sizeof *d); snprintf(d->id, sizeof d->id, "%s", it->id); snprintf(d->type, sizeof d->type, "%s", it->type); snprintf(d->vid, sizeof d->vid, "%s", vid);
-  snprintf(d->name, sizeof d->name, "%s", it->name); snprintf(d->ep, sizeof d->ep, "%s", ep ? ep : ""); char pb[600]; snprintf(d->poster, sizeof d->poster, "%s", sb_poster_of(it, pb, sizeof pb)); snprintf(d->bg, sizeof d->bg, "%s", it->background);
+  snprintf(d->name, sizeof d->name, "%s", it->name); snprintf(d->ep, sizeof d->ep, "%s", ep ? ep : ""); char pb[600]; snprintf(d->poster, sizeof d->poster, "%s", sb_poster_of(it, pb, sizeof pb)); snprintf(d->bg, sizeof d->bg, "%s", it->background); if (d->bg[0]) img_prefetch(d->bg, 640, 360);
   snprintf(d->url, sizeof d->url, "%s", s->url); info_of(s, d->info, sizeof d->info); snprintf(d->group, sizeof d->group, "%s", group ? group : ""); d->size = s->size > 0 ? (long long)s->size : 0; d->state = DL_QUEUED; NEWWAIT(d); save(); notify_now(); notify_tick(); ask_data(); { void pplat_ask_notifications(void); pplat_ask_notifications(); }
   if (!quiet) ph_fly(d->poster, 3); /* the poster flies to the Downloads tab */
   return 1;
@@ -374,7 +387,7 @@ static struct { char path[600], id[64], vid[96], up[SB_URL_MAX]; long long size,
    not here yet comes from (the torrent engine, the link), and the parts the film fetched itself (written into the file,
    then counted by the download: what is watched ahead is downloaded too) */
 static void sv_drop(const char *id, const char *vid) { pthread_mutex_lock(&svMu); for (int q = 0; q < 4; q++) if (SV[q].live && !strcmp(SV[q].id, id) && !strcmp(SV[q].vid, vid)) { SV[q].live = 0; SV[q].tee = 0; } pthread_mutex_unlock(&svMu); }
-static void sv_update(void) { extern int player_open(void); pthread_mutex_lock(&svMu); for (int k = 0; k < 4; k++) if (SV[k].live) { if (SV[k].tee && !player_open()) { for (int L = 0; L < NL; L++) if (TDL[L].url[0] && !strcmp(TDL[L].url, SV[k].teeUp)) { char k2[200]; snprintf(k2, sizeof k2, "%s|%s", SV[k].id, SV[k].vid); TDL[L].url[0] = 0; pxAt = 0;
+static void sv_update(void) { extern int player_open(void); pthread_mutex_lock(&svMu); for (int k = 0; k < 4; k++) { if (SV[k].live) { if (SV[k].tee && !player_open()) { for (int L = 0; L < NL; L++) if (TDL[L].url[0] && !strcmp(TDL[L].url, SV[k].teeUp)) { char k2[200]; snprintf(k2, sizeof k2, "%s|%s", SV[k].id, SV[k].vid); TDL[L].url[0] = 0; pxAt = 0;
         for (int j = 0; j < nd; j++) if (!strcmp(D[j].id, SV[k].id) && !strcmp(D[j].vid, SV[k].vid) && D[j].state == DL_RUNNING && lane_of(j) < 0) { D[j].state = DL_QUEUED; TDL[L].ahead = 0; snprintf(tdWant, sizeof tdWant, "%s", k2); tdWait = 0; } }
       SV[k].tee = 0; SV[k].teeUp[0] = 0; SV[k].up[0] = 0; } /* (the film gone: its engine address too; the download on its own at once, first) */
     int i = find(SV[k].id, SV[k].vid); if (i >= 0 && SV[k].tee && strncmp(D[i].url, SV[k].teeSrc, strlen(SV[k].teeSrc))) i = -1; /* (a download of another torrent of it: nothing kept from this one) */
@@ -387,7 +400,7 @@ static void sv_update(void) { extern int player_open(void); pthread_mutex_lock(&
       memcpy(SV[k].rg, d->rg, sizeof d->rg); SV[k].nrg = d->nrg; if (w && w->busy && w->idx == i && w->to >= 0 && w->got > 0 && SV[k].nrg < 24) { SV[k].rg[SV[k].nrg][0] = w->from; SV[k].rg[SV[k].nrg][1] = w->from + w->got; SV[k].nrg++; } SV[k].wr = 1; }
     else { SV[k].rg[0][0] = 0; SV[k].rg[0][1] = d->got; SV[k].nrg = d->got > 0; SV[k].wr = 0; } /* (a link's download: in order, from the start) */
     SV[k].got = d->got; if (d->size > 0) SV[k].size = d->size; SV[k].done = d->state == DL_DONE; if (d->file[0]) snprintf(SV[k].path, sizeof SV[k].path, "%s", d->file);
-    if (is_p2p(d)) { char k2[200]; snprintf(k2, sizeof k2, "%s|%s", d->id, d->vid); const char *lu = ""; for (int q = 0; q < NL; q++) if (TDL[q].url[0] && !strcmp(k2, TDL[q].key)) lu = TDL[q].url; snprintf(SV[k].up, sizeof SV[k].up, "%s", SV[k].tee && SV[k].teeUp[0] ? SV[k].teeUp : lu); } else snprintf(SV[k].up, sizeof SV[k].up, "%s", !strncmp(d->url, "http", 4) ? d->url : ""); } pthread_mutex_unlock(&svMu); }
+    if (is_p2p(d)) { char k2[200]; snprintf(k2, sizeof k2, "%s|%s", d->id, d->vid); const char *lu = ""; for (int q = 0; q < NL; q++) { if (TDL[q].url[0] && !strcmp(k2, TDL[q].key)) lu = TDL[q].url; } snprintf(SV[k].up, sizeof SV[k].up, "%s", SV[k].tee && SV[k].teeUp[0] ? SV[k].teeUp : lu); } else snprintf(SV[k].up, sizeof SV[k].up, "%s", !strncmp(d->url, "http", 4) ? d->url : ""); } } pthread_mutex_unlock(&svMu); }
 static int px_busy_key(const char *key) { if (!px_busy() || !key || !key[0]) return 0; int k = pxK; if (k < 0 || k >= 4) return 0; char k2[200]; pthread_mutex_lock(&svMu); snprintf(k2, sizeof k2, "%s|%s", SV[k].id, SV[k].vid); pthread_mutex_unlock(&svMu); return !strcmp(k2, key); }
 /* a part not here yet: from its source to the player, written into the file on the way (a torrent's) */
 typedef struct { int c, ok, k, wr; long long at, mark; FILE *f; int chk; } Px;
@@ -473,7 +486,7 @@ void ph_download_group(const Item *it, const char *const *vids, const char *cons
   load(); if (n <= 0) return; int added = 0; char pb[600]; sb_poster_of(it, pb, sizeof pb);
   for (int k = 0; k < n; k++) { int i = find(it->id, vids[k]); if (i >= 0 && D[i].state != DL_NOSTREAM && D[i].state != DL_FAILED) continue; if (i < 0) { if (nd >= MAXD) break; i = nd++; }
     Dl *d = &D[i]; memset(d, 0, sizeof *d); snprintf(d->id, sizeof d->id, "%s", it->id); snprintf(d->type, sizeof d->type, "%s", it->type); snprintf(d->vid, sizeof d->vid, "%s", vids[k]);
-    snprintf(d->name, sizeof d->name, "%s", it->name); snprintf(d->ep, sizeof d->ep, "%s", eps && eps[k] ? eps[k] : ""); snprintf(d->poster, sizeof d->poster, "%s", pb); snprintf(d->bg, sizeof d->bg, "%s", it->background);
+    snprintf(d->name, sizeof d->name, "%s", it->name); snprintf(d->ep, sizeof d->ep, "%s", eps && eps[k] ? eps[k] : ""); snprintf(d->poster, sizeof d->poster, "%s", pb); snprintf(d->bg, sizeof d->bg, "%s", it->background); if (d->bg[0]) img_prefetch(d->bg, 640, 360);
     snprintf(d->group, sizeof d->group, "%s", group ? group : ""); d->state = DL_CHOOSING; NEWWAIT(d); q_push(i); added++; }
   if (!added) { toast(T("Already downloaded"), 1600, NULL); return; }
   save(); ph_fly(pb, 3); notify_now(); notify_tick(); qIt = *it; q_next(); ask_data(); { void pplat_ask_notifications(void); pplat_ask_notifications(); } }
@@ -483,7 +496,7 @@ void ph_download_items(const Item *its, int n, const char *group) {
   for (int k = 0; k < n; k++) { const Item *it = &its[k]; int i = find(it->id, it->id); if (i >= 0 && D[i].state != DL_NOSTREAM && D[i].state != DL_FAILED) { if (group && *group && strcmp(D[i].group, group)) { snprintf(D[i].group, sizeof D[i].group, "%s", group); added++; } continue; } /* (one already here: it joins the group) */
     if (i < 0) { if (nd >= MAXD) break; i = nd++; }
     Dl *d = &D[i]; memset(d, 0, sizeof *d); snprintf(d->id, sizeof d->id, "%s", it->id); snprintf(d->type, sizeof d->type, "%s", it->type); snprintf(d->vid, sizeof d->vid, "%s", it->id);
-    snprintf(d->name, sizeof d->name, "%s", it->name); char b[600]; snprintf(d->poster, sizeof d->poster, "%s", sb_poster_of(it, b, sizeof b)); if (!pb[0]) snprintf(pb, sizeof pb, "%s", d->poster); snprintf(d->bg, sizeof d->bg, "%s", it->background);
+    snprintf(d->name, sizeof d->name, "%s", it->name); char b[600]; snprintf(d->poster, sizeof d->poster, "%s", sb_poster_of(it, b, sizeof b)); if (!pb[0]) snprintf(pb, sizeof pb, "%s", d->poster); snprintf(d->bg, sizeof d->bg, "%s", it->background); if (d->bg[0]) img_prefetch(d->bg, 640, 360);
     snprintf(d->group, sizeof d->group, "%s", group ? group : ""); d->state = DL_CHOOSING; NEWWAIT(d); q_push(i); added++; }
   if (!added) { toast(T("Already downloaded"), 1600, NULL); return; }
   save(); if (pb[0]) ph_fly(pb, 3); notify_now(); notify_tick(); q_next(); ask_data(); { void pplat_ask_notifications(void); pplat_ask_notifications(); } }
