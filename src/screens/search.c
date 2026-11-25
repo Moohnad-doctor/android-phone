@@ -27,7 +27,7 @@
 #define NK 36
 #define SCOLS 6
 #define SMAX 24
-#define NCAT 16
+#define NCAT 64
 #define SGC 4
 #define SROWH 456.0f   /* the scroll step per row (the web's; its rows lie 420 apart) */
 #define SPITCH 420.0f  /* a poster (354) and the space under it (66) */
@@ -134,10 +134,30 @@ static void on_sug(ItemList *l, char names[6][128], int nn, void *ud) {
   S.nsug = 0; for (int i = 0; i < nn && S.nsug < 6; i++) { int dup = 0; for (int k = 0; k < S.nsug; k++) if (!strcasecmp(S.sug[k], names[i])) dup = 1; if (!dup && names[i][0]) snprintf(S.sug[S.nsug++], 128, "%s", names[i]); }
   S.topDone = 1; if (!S.firstAt) S.firstAt = app_now(); merge();
 }
-/* a catalog's answer: the query's token above, the catalog's place in the low 5 bits */
-static void on_cat(ItemList *l, int cached, void *ud) { (void)cached; uintptr_t t = (uintptr_t)ud; int c = (int)(t & 31);
-  if ((unsigned)(t >> 5) != (S.tok & 0x7ffffff) || c >= S.ncat) { itemlist_free(l); return; } itemlist_clear(&S.cat[c]); S.catFail[c] = l->total < 0; if (!S.catFail[c]) { int k = 0; for (int i = 0; i < l->n; i++) if (!notice_item(&l->items[i])) k++; else fprintf(stderr, "[search] catalog %d sent a notice, left out: %s (%s)\n", c, l->items[i].name, l->items[i].id); S.catFail[c] = l->n > 0 && !k; } /* only notices: failed too */
-  S.cat[c] = *l; free(l); S.catDone[c] = 1; if (!S.firstAt) S.firstAt = app_now(); merge(); }
+/* a catalog's answer: six low bits hold its place, the rest identify this query */
+static void on_cat(ItemList *l, int cached, void *ud) {
+  (void)cached;
+  uintptr_t t = (uintptr_t)ud;
+  int c = (int)(t & 63);
+  if ((unsigned)(t >> 6) != (S.tok & 0x3ffffff) || c >= S.ncat) { if (l) itemlist_free(l); return; }
+  itemlist_clear(&S.cat[c]);
+  S.catFail[c] = !l || l->total < 0;
+  if (l) {
+    if (!S.catFail[c]) {
+      int k = 0;
+      for (int i = 0; i < l->n; i++) {
+        if (!notice_item(&l->items[i])) k++;
+        else fprintf(stderr, "[search] catalog %d sent a notice, left out: %s (%s)\\n", c, l->items[i].name, l->items[i].id);
+      }
+      S.catFail[c] = l->n > 0 && !k;
+    }
+    S.cat[c] = *l;
+    free(l);
+  }
+  S.catDone[c] = 1;
+  if (!S.firstAt) S.firstAt = app_now();
+  merge();
+}
 static void urlenc(const char *s, char *out, size_t cap) { size_t o = 0; for (; *s && o + 4 < cap; s++) { unsigned char c = *s; if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.') out[o++] = c; else o += snprintf(out + o, cap - o, "%%%02X", c); } out[o] = 0; }
 static void live(void) {
   char q[48]; snprintf(q, sizeof q, "%s", S.q); char *e = q + strlen(q); while (e > q && e[-1] == ' ') *--e = 0; const char *p = q; while (*p == ' ') p++;
@@ -156,7 +176,7 @@ static void cat_go(void) {
     for (int i = 0; i < 2; i++) { memset(&defs[n], 0, sizeof defs[n]); snprintf(defs[n].type, sizeof defs[n].type, "%s", ty[i]); snprintf(defs[n].url, sizeof defs[n].url, CINEMETA "/catalog/%s/top/search=%s.json", ty[i], enc); n++; } }
   for (int c = 0; c < S.ncat; c++) itemlist_clear(&S.cat[c]); S.ncat = n; for (int c = 0; c < n; c++) S.catDone[c] = S.catFail[c] = 0;
   fprintf(stderr, "[search] a query of %d character(s) in %d catalog(s)\n", (int)strlen(p), n); /* (never the words typed: the log may be shared) */
-  for (int c = 0; c < n; c++) sb_catalog_url(defs[c].url, defs[c].type, 20, on_cat, (void *)(uintptr_t)(((uintptr_t)(S.tok & 0x7ffffff) << 5) | (uintptr_t)c));
+  for (int c = 0; c < n; c++) sb_catalog_url(defs[c].url, defs[c].type, 20, on_cat, (void *)(uintptr_t)(((uintptr_t)(S.tok & 0x3ffffff) << 6) | (uintptr_t)c));
 }
 /* the QR for typing on the phone, and what arrives from it (asked only while Search is up) */
 static void phone_ask(void) { if (S.qrOk) { httpd_start(); return; } S.qrAt = app_now(); S.qrOk = httpd_url("", S.qrUrl, sizeof S.qrUrl); }

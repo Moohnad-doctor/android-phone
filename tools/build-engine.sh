@@ -23,14 +23,15 @@ git -C "$SRC" apply --whitespace=nowarn "$ROOT/tools/engine/engine.patch"
 DEPS="${ENGINE_DEPS:-$W/deps}"; mkdir -p "$DEPS"
 if [ ! -f "$DEPS/nuvio_boost-src/boost/version.hpp" ]; then
   curl -fsSL -o "$DEPS/boost.tar.bz2" https://archives.boost.io/release/1.86.0/source/boost_1_86_0.tar.bz2
-  echo "1bed88e40401b2cb7a1f76d4bab499e352fa4d0c5f31c0dbae64e24d34d7513b  $DEPS/boost.tar.bz2" | shasum -a 256 -c -
+  echo "1bed88e40401b2cb7a1f76d4bab499e352fa4d0c5f31c0dbae64e24d34d7513b  $DEPS/boost.tar.bz2" | sha256sum -c -
   rm -rf "$DEPS/nuvio_boost-src"; mkdir -p "$DEPS/nuvio_boost-src"; tar -xjf "$DEPS/boost.tar.bz2" -C "$DEPS/nuvio_boost-src" --strip-components 1; rm -f "$DEPS/boost.tar.bz2"
 fi
 if [ ! -d "$DEPS/nuvio_libtorrent-src/.git" ]; then
   git clone -q https://github.com/arvidn/libtorrent.git "$DEPS/nuvio_libtorrent-src"
-  git -C "$DEPS/nuvio_libtorrent-src" checkout -q 740a0b9aeabe00e762cc0efe4a0f27593db2550b
-  git -C "$DEPS/nuvio_libtorrent-src" submodule update -q --init deps/try_signal
 fi
+git -C "$DEPS/nuvio_libtorrent-src" checkout -q 740a0b9aeabe00e762cc0efe4a0f27593db2550b
+git -C "$DEPS/nuvio_libtorrent-src" reset -q --hard 740a0b9aeabe00e762cc0efe4a0f27593db2550b
+git -C "$DEPS/nuvio_libtorrent-src" submodule update -q --init deps/try_signal
 case "$TARGET" in
   webos) ZT="-target arm-linux-gnueabi.${GLIBC:-2.17} -mcpu=cortex_a9-neon -mfloat-abi=softfp"; OUT="$ROOT/build/webos/libsbengine.so"; SYS=Linux; PROC=arm ;;   # soft-float ABI like the app; this compiler drops NEON from the assembler there, so libtorrent takes its portable paths
   mac)   ZT=""; OUT="$ROOT/build/mac/libsbengine.dylib"; SYS=Darwin; PROC=aarch64 ;;
@@ -40,7 +41,12 @@ case "$TARGET" in
 esac
 TC="$W/tc-$TARGET"; mkdir -p "$TC"
 case "$TARGET" in android-*)   # the NDK's own toolchain: c++_static, so the library needs no libc++_shared.so
-  NDK="${NDK:-$HOME/stremiobrew-build/android/sdk/ndk/27.2.12479018}"; NBIN="$NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin"
+  NDK="${NDK:-${ANDROID_NDK_ROOT:-${ANDROID_NDK_HOME:-$HOME/stremiobrew-build/android/sdk/ndk/27.2.12479018}}}"
+  NBIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+  for tool in clang++ llvm-strip llvm-readelf llvm-nm; do
+    [ -x "$NBIN/$tool" ] || { echo "missing Android NDK tool: $NBIN/$tool" >&2; exit 1; }
+  done
+  [ -f "$NDK/build/cmake/android.toolchain.cmake" ] || { echo "missing Android CMake toolchain under $NDK" >&2; exit 1; }
   printf '#!/bin/sh\nexec "%s" --target=%s "$@"\n' "$NBIN/clang++" "$TRIPLE" > "$TC/c++"; chmod 755 "$TC/c++"
   TCARGS=(-DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" -DANDROID_ABI="$ABI" -DANDROID_PLATFORM=android-24 -DANDROID_STL=c++_static) ;;
 *)
@@ -86,4 +92,12 @@ else
     "$B/libnuvio_engine.a" "$LT" "${SSLLIB[@]}" -framework Security -framework CoreFoundation -framework SystemConfiguration \
     -Wl,-dead_strip -o "$OUT"
 fi
+if [[ "$TARGET" == android-* ]]; then
+  "$NBIN/llvm-readelf" -h "$OUT" | grep -q "Machine:.*AArch64"
+  "$NBIN/llvm-nm" -D --defined-only "$OUT" | grep -Eq "[[:space:]]sbe_get$"
+test -s "$OUT"
+ls -l "$OUT"
+
+fi
+test -s "$OUT"
 ls -l "$OUT"

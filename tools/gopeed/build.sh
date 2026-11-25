@@ -14,9 +14,11 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 WORK="${SB_GOPEED_DIR:-$HOME/stremiobrew-build/gopeed}"
 SRC="$WORK/src"
-GO="${GO:-/opt/homebrew/bin/go}"
-NDK="${NDK:-$HOME/stremiobrew-build/android/sdk/ndk/27.2.12479018}"
+GO="${GO:-$(command -v go || true)}"
+NDK="${NDK:-${ANDROID_NDK_ROOT:-${ANDROID_NDK_HOME:-$HOME/stremiobrew-build/android/sdk/ndk/27.2.12479018}}}"
 API=24
+[ -x "$GO" ] || { echo "Go toolchain not found (set GO or install Go 1.25.4)" >&2; exit 1; }
+[ -x "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android$API-clang" ] || { echo "Linux Android NDK compiler not found under $NDK" >&2; exit 1; }
 
 if [ ! -d "$SRC/.git" ]; then
   mkdir -p "$WORK"
@@ -53,7 +55,7 @@ sed -E -e '/engine\/webview"/d' -e '/WebViewProvider/d' \
 export GOTOOLCHAIN=local CGO_ENABLED=1
 LDX="-s -w -X main.gopeedCommit=$(echo $GOPEED_COMMIT | cut -c1-12)"
 
-host_tag() { case "$(uname -s)" in Darwin) echo darwin-x86_64 ;; *) echo linux-x86_64 ;; esac; }
+host_tag() { echo "${ANDROID_NDK_HOST_TAG:-linux-x86_64}"; }
 
 build() {
   case "$1" in
