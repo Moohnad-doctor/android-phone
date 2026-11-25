@@ -169,6 +169,11 @@ static int home_curate(CatalogDef *out, int max) {
     if (pick < 0 && n) pick = slot < 3 ? 0 : n - 1;
     if (pick < 0) continue;
     out[count] = all[pick]; snprintf(out[count].title, sizeof out[count].title, "%s", labels[slot]);
+    if (slot == 4 && !home_has(all[pick].title, "anime") && !home_has(all[pick].title, "animation")) {
+      if (!out[count].extra[0]) snprintf(out[count].extra, sizeof out[count].extra, "genre=Animation");
+      else { size_t exn = strlen(out[count].extra); if (exn + sizeof "&genre=Animation" < sizeof out[count].extra) strcat(out[count].extra, "&genre=Animation"); }
+      snprintf(out[count].url, sizeof out[count].url, "%s/%s.json", out[count].path, out[count].extra);
+    }
     used[pick] = 1; count++;
   }
   return count;
