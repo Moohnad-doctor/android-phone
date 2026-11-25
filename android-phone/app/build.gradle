@@ -55,7 +55,8 @@ android {
     }
 
     /* one APK per processor: libVLC is large, a phone only needs its own */
-    splits { abi { enable true; reset(); include 'arm64-v8a', 'armeabi-v7a'; universalApk false } }
+    def targetAbis = (project.findProperty('targetAbis') ?: 'arm64-v8a,armeabi-v7a').toString().split(',').collect { it.trim() }.findAll { it }
+    splits { abi { enable true; reset(); include(*targetAbis); universalApk false } }
 
     sourceSets {
         main {
