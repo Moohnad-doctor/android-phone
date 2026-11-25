@@ -132,7 +132,7 @@ static void a_dl(int a, int b) { (void)a; (void)b; if (dlMode == 2) { dlOpen = !
 static void a_zap(int sd, int b) { (void)b; keep(); live_zap(sd > 0 ? 1 : -1); pplat_haptic_k(HK_TICK, 0.6f); } /* a channel: the next one, or the one before */
 static void a_todl(int a, int b) { (void)a; (void)b; player_back(); app_go(SCR_DISC, NULL, 1); }
 #define TOPY 74.0f
-#define TOPR 48.0f
+#define TOPR 26.0f
 #define DLX (SB_W - 320)
 /* the download button held: it opens into a card with everything about the download (how far, how much, how fast,
    how long left, its peers); a tap on the card folds it back; a tap on the button pauses or goes on */
@@ -616,11 +616,11 @@ void phone_player_draw(void) {
     double t = G.mode == 4 || G.mode == 1 ? scrubT : heldT >= 0 ? heldT : pt; /* (no jump back while the seek lands) */ float x0 = barX0(), x1 = barX1(), by = barY(), bw = x1 - x0;
     int lv = live_now(); /* a live broadcast: LIVE in red where the time left was, the bar full, no knob */
     char tl[24], tr[24]; fmt(t, tl, sizeof tl); fmt(d > t ? d - t : 0, tr + 1, sizeof tr - 1); tr[0] = '-'; if (d <= 0) snprintf(tr, sizeof tr, "--:--");
-    if (lv) { snprintf(tr, sizeof tr, "%s", T("LIVE")); text_draw(tr, x1 + 24, by - text_line_height(26) / 2.0f + 2, 26, 800, RGB(0xff, 0x4d, 0x4d), 0.5f, 0, ALIGN_START); }
-    else { text_draw(tl, x0 - 24, by - text_line_height(26) / 2.0f + 2, 26, 700, WHITE_A(235), 0, 0, ALIGN_RIGHT); text_draw(tr, x1 + 24, by - text_line_height(26) / 2.0f + 2, 26, 700, WHITE_A(200), 0, 0, ALIGN_LEFT); }
+    if (lv) { snprintf(tr, sizeof tr, "%s", T("LIVE")); text_draw(tr, x1 + 24, by - text_line_height(15) / 2.0f + 2, 15, 800, RGB(0xff, 0x4d, 0x4d), 0.5f, 0, ALIGN_START); }
+    else { text_draw(tl, x0 - 24, by - text_line_height(15) / 2.0f + 2, 15, 700, WHITE_A(235), 0, 0, ALIGN_RIGHT); text_draw(tr, x1 + 24, by - text_line_height(26) / 2.0f + 2, 26, 700, WHITE_A(200), 0, 0, ALIGN_LEFT); }
     float pd = d > 0 ? clampf((float)(t / d), 0, 1) : 0;
     if (lv) { gfx_rrect(x0, by - 5, bw, 10, 5, RGB(0xff, 0x4d, 0x4d)); } else {
-    float pb = d > 0 ? (float)(player_buffered() / d) : 0; pb = clampf(pb, 0, 1); float th = G.mode == 4 || G.mode == 1 ? 14 : 10;
+    float pb = d > 0 ? (float)(player_buffered() / d) : 0; pb = clampf(pb, 0, 1); float th = G.mode == 4 || G.mode == 1 ? 8 : 6;
     gfx_rrect(x0, by - th / 2, bw, th, th / 2, WHITE_A(55));
     { Item it_; char v_[96]; const Stream *s_; float ph_dl_fraction(const char *id, const char *vid); float fd = player_now(&it_, v_, sizeof v_, &s_) ? ph_dl_fraction(it_.id, v_) : -1; /* a download of it, in order: the part on the phone */
       if (fd > 0 && fd < 1) gfx_rrect(x0, by - th / 2, bw * fd, th, th / 2, col_alpha(ACC2 | 0xff000000u, 0.45f)); }
@@ -628,7 +628,7 @@ void phone_player_draw(void) {
     if (d > 0) { extern int player_marks(double *s, double *e, int max); double ms[3], me[3]; int nm = player_marks(ms, me, 3); /* the intro, the recap, the credits: marked on the bar */
       for (int q = 0; q < nm; q++) { float mx0 = x0 + bw * (float)clampf((float)(ms[q] / d), 0, 1), mx1 = x0 + bw * (float)clampf((float)(me[q] / d), 0, 1); if (mx1 - mx0 < 6) mx1 = mx0 + 6;
         gfx_rrect(mx0, by - th / 2 - 1, mx1 - mx0, th + 2, (th + 2) / 2, col_alpha(ACC2 | 0xff000000u, 0.55f)); gfx_rect(mx0, by - th / 2 - 5, 2.5f, th + 10, WHITE_A(200)); } }
-    float kr = G.mode == 4 || G.mode == 1 ? 24 : 16; gfx_shadow(x0 + bw * pd - kr, by - kr + 3, 2 * kr, 2 * kr, kr, 10, BLACK_A(120)); gfx_circle(x0 + bw * pd, by, kr, WHITE_A(250));
+    float kr = G.mode == 4 || G.mode == 1 ? 13 : 9; gfx_shadow(x0 + bw * pd - kr, by - kr + 3, 2 * kr, 2 * kr, kr, 10, BLACK_A(120)); gfx_circle(x0 + bw * pd, by, kr, WHITE_A(250));
     } /* (not live) */
     if (G.mode == 4 && !lv) { stripT = t; stripFrom = 0; stripDelta = 0; }
     if (G.mode != 4 && G.mode != 1 && !lv && stripT >= 0 && seekK.v > 0.01f) prev_strip(stripT, stripFrom, stripDelta, seekK.v); /* (let go: the strip fades where it was, not gone at once) */
@@ -645,9 +645,9 @@ void phone_player_draw(void) {
       static char sp[16]; snprintf(sp, sizeof sp, "%g\xc3\x97", speed); if (!lv) { L[n] = sp; I[n] = NULL; K[n++] = 6; } /* (a live broadcast: no speed) */
       { static char an[64]; const char *m = player_aspect(); snprintf(an, sizeof an, "%s", !strcmp(m, "fill") ? T("Fill the screen") : !strcmp(m, "zoom") ? T("Zoom") : T("Original")); tween_to(&aspK, app_now() - aspAt < 1.6 ? 1 : 0, app_now() - aspAt < 1.6 ? 0.3f : 0.35f, EASE_WEB); tween_tick(&aspK, phDt);
         L[n] = aspK.v > 0.01f ? an : NULL; I[n] = "p_asp"; K[n++] = 8; } /* its name unfolds a moment after a change, then it folds back to its sign */
-      float tot = 0, ws[7]; for (int i = 0; i < n; i++) { ws[i] = L[i] ? text_width(L[i], 27, 700, 0) + (I[i] ? icons_w(I[i]) + 12 : 0) + 56 : icons_w(I[i]) + 58; if (K[i] == 8 && L[i]) { float w0 = icons_w(I[i]) + 58; ws[i] = w0 + (ws[i] - w0) * aspK.v; } tot += ws[i] + 14; } tot -= 14; /* (the size pill unfolding: the others make room as it does) */
-      float x = SB_W - 40 - tot, y = SB_H - 112; if (x < 30) x = 30; /* pushed right: the stream's specs on the left */
-      { extern int player_specs(const char **t, const char **icon, int *bold, int max); const char *st[8], *si[8]; int sb[8], ns = player_specs(st, si, sb, 8); float sx = 44, cy = y + 39, lim = x - 28, fs = 23;
+      float tot = 0, ws[7]; for (int i = 0; i < n; i++) { ws[i] = L[i] ? text_width(L[i], 15, 700, 0) + (I[i] ? icons_w(I[i]) + 8 : 0) + 32 : icons_w(I[i]) + 32; if (K[i] == 8 && L[i]) { float w0 = icons_w(I[i]) + 32; ws[i] = w0 + (ws[i] - w0) * aspK.v; } tot += ws[i] + 14; } tot -= 14; /* (the size pill unfolding: the others make room as it does) */
+      float x = SB_W - 40 - tot, y = SB_H - 77; if (x < 30) x = 30; /* pushed right: the stream's specs on the left */
+      { extern int player_specs(const char **t, const char **icon, int *bold, int max); const char *st[8], *si[8]; int sb[8], ns = player_specs(st, si, sb, 8); float sx = 44, cy = y + 21.5f, lim = x - 28, fs = 13;
         for (int i = 0; i < ns && sx < lim - 60; i++) { int b = sb[i]; float iw = si[i] ? 34 : 0, tw = text_width(st[i], fs, b ? 800 : 600, b ? 0.5f : 0), w = b ? tw + 22 : tw + iw, gap = i ? (si[i] && !si[i - 1] ? 26 : 20) : 0;
           if (si[i] && !strcmp(st[i], "|")) continue;
           char cut[100]; if (si[i] && !strcmp(si[i], "p_cc")) { snprintf(cut, sizeof cut, "%s", st[i]); char *d = strstr(cut, " \xc2\xb7 "); if (d) *d = 0; st[i] = cut; tw = text_width(st[i], fs, 600, 0); w = tw + iw; } /* the subtitle: its language alone */
