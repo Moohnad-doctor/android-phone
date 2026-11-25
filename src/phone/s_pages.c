@@ -174,9 +174,11 @@ static void grp_sel(const Dl *d, int on) { for (int j = 0; j < ph_dl_count(); j+
 static void del_vid(const char *id, const char *vid) { for (int j = ph_dl_count() - 1; j >= 0; j--) { const Dl *o = ph_dl_get(j); if (!strcmp(o->id, id) && !strcmp(o->vid, vid)) { ph_dl_remove(j); return; } } }
 static void del_grp(const char *id, const char *g) {
   int cl = !strncmp(g, "coll:", 5), series = !strncmp(g, "series:", 7) || !strncmp(g, "series-title:", 13);
+  const Dl *base = NULL;
+  if (series) for (int j = 0; j < ph_dl_count(); j++) { const Dl *o = ph_dl_get(j); char k[260]; grp_key(o, k, sizeof k); if (!strcmp(k, g)) { base = o; break; } }
   for (int j = ph_dl_count() - 1; j >= 0; j--) {
     const Dl *o = ph_dl_get(j); int match = 0;
-    if (series && !strcmp(o->type, "series")) { char k[260]; grp_key(o, k, sizeof k); match = !strcmp(k, g); }
+    if (series && base && !strcmp(o->type, "series")) match = same_grp(o, base);
     else if (!series) match = (cl || !strcmp(o->id, id)) && !strcmp(o->group, g);
     if (match) ph_dl_remove(j);
   }
