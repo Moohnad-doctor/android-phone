@@ -534,10 +534,9 @@ static float page_body(int pg, float y, const char **titleOut) { const char *tit
       /* the app: its mark and version */
       { float cx = SB_W / 2; gfx_rrect_v(cx - 56, y, 112, 112, 56, RGB(0x6a, 0x45, 0xe0), RGB(0x2f, 0x1a, 0x9e)); icon_draw("o_play", cx - 40, y + 14, 84, WHITE_A(255));
         text_draw("myth", cx, y + 132, F_H2, 800, TXT, -0.3f, 0, ALIGN_CENTER); text_draw(T1("Version {v}", "v", update_current()), cx, y + 180, F_SMALL, 600, TXT3, 0, 0, ALIGN_CENTER); y += 240; }
-      int nr = 1 + (av ? 1 : 0) + 1; grp(y, nr);
+      int nr = 2 + (av ? 1 : 0); grp(y, nr);
       if (av) { act_row(y, "st_update", TINT_GREEN, st == UPD_INSTALLING ? T1("Installing version {v}…", "v", av) : T1("Install version {v}", "v", av), update_msg()[0] ? update_msg() : T("Downloads, checks and installs it; the app opens again by itself"), install_act, 0); y += RH; }
       act_row(y, "st_update", TINT_BLUE, T("Check for updates"), st == UPD_CHECKING ? T("Checking for updates…") : st == UPD_ERROR ? T("Could not check for updates") : av ? T1("Version {v} is available", "v", av) : st == UPD_NONE ? T("You have the latest version") : "", check_act, 0); y += RH;
-      act_row(y, "st_new", TINT_PURPLE, T("What\xe2\x80\x99s new"), T1("Version {v}", "v", update_current()), news_act, 0); y += RH;
       act_row(y, "st_logs", TINT_GREY, T("Share logs"), S.code[0] ? T1("Code {c}: give it with what happened", "c", S.code) : T("Share the code and describe the issue"), logs_act, 0); y = grp_end();
       break; }
   }  *titleOut = title; return y; }
