@@ -152,21 +152,6 @@ static void hud_circle(float cx, float cy, float r, const char *icon, int lit, P
   icon_draw(icon, cx - r * 0.55f, cy - r * 0.55f, r * 1.1f, lit ? ACC_FG : WHITE_A(240)); gfx_scale_pop();
   if (fn) phit(cx - r - 8, cy - r - 8, 2 * r + 16, 2 * r + 16, fn, a, 0);
 }
-/* a pill's icons: one, or two joined by a slash ("p_cc/p_spk": subtitles and sound in one) */
-static float icons_w(const char *icon) { return !icon ? 0 : strchr(icon, '/') ? 12.65f + 6.6f + 12.65f : 12.65f; }
-static void icons_draw(const char *icon, float x, float cy, uint32_t c) { const char *sl = strchr(icon, '/'); char a[32]; snprintf(a, sizeof a, "%.*s", (int)(sl ? sl - icon : (long)strlen(icon)), icon);
-  icon_draw(a, x, cy - 6.6f, 12.65f, c); if (sl) { text_draw("/", x + 12.65f + 3.3f, cy - text_line_height(9) / 2.0f,9, 600, col_alpha(c, 0.6f), 0, 0, ALIGN_CENTER); icon_draw(sl + 1, x + 12.65f + 6.6f, cy - 6.6f, 12.65f, c); } }
-static int pillPulseK = -1; static double pillPulseAt; /* a tray just gone back into its pill: it bounces */
-static float pillLK = 1; /* how much of its words a pill shows (the size pill unfolding its name): set for one call */
-static float pill(float x, float y, const char *icon, const char *label, int lit, PFn fn, int a) {
-  float lk = pillLK; pillLK = 1; float h = 23.65f, tw = label ? text_width(label, 8, 700, 0) : 0, w0 = icons_w(icon) + 17.6f, w = label ? tw + (icon ? icons_w(icon) + 4.4f : 0) + 17.6f : w0; if (label && lk < 1) w = w0 + (w - w0) * lk; /* no label: a short pill, the icon alone */ float pk = ppress(x, y, w, h), k = 1 - 0.05f * pk; { float q = (float)((app_now() - pillPulseAt) / 0.5); if (a == pillPulseK && q >= 0 && q < 1) k *= 1 + 0.16f * sinf(q * (float)M_PI * 1.5f) * expf(-q * 3); } gfx_scale_push(k, k, x + w / 2, y + h / 2); /* (a tray just gone back into it: a little bounce) */
-  pglass(x, y, w, h, h / 2, lit ? col_alpha(ACC, 0.68f) : BLACK_A(72), lit ? col_alpha(ACC, 0.8f) : BLACK_A(128), 0, pk); gfx_ring(x, y, w, h, h / 2, 0.9f, WHITE_A(lit ? 30 : 40));
-  if (pk > 0) gfx_rrect(x, y, w, h, h / 2, WHITE_A((int)(30 * pk)));
-  float cx = label ? x + 8.8f + (1 - lk) * (w0 / 2 - icons_w(icon) / 2 - 15.4f) : x + w / 2 - icons_w(icon) / 2; if (icon) { icons_draw(icon, cx, y + h / 2, lit ? ACC_FG : WHITE_A(235)); cx += icons_w(icon) + 4.4f; }
-  if (label && lk > 0.01f) { gfx_clip_push(x, y, w - 20, h); gfx_opacity_push(lk); text_draw(label, cx, y + h / 2 - text_line_height(8) / 2.0f,8, 700, lit ? ACC_FG : WHITE_A(240), 0, 0, ALIGN_LEFT); gfx_opacity_pop(); gfx_clip_pop(); }
-  gfx_scale_pop(); if (fn) phit(x, y - 5.5f, w, h + 11, fn, a, 0); return w;
-}
-
 /* ---- the actions ---- */
 static void a_keep(int a, int b) { (void)a; (void)b; keep(); }
 static void a_back(int a, int b) { (void)a; (void)b; if (infoRow >= 0) { infoRow = -1; tween_to(&infoA, 0, 0.2f, EASE_CSS_EASE); return; } if (panel) { void ph_live_panel_state(int on); ph_live_panel_state(0); player_tray_close(); panel = 0; tween_to(&panA, 0, 0.3f, EASE_WEB); ui_show(1); return; } watch_progress_save_now(); player_back(); } /* the panel shrinks back into its pill; the controls come back */
@@ -224,7 +209,7 @@ static double playTapAt; /* the play button pressed by hand (a seek's wait ends 
 static void a_play(int a, int b) { (void)a; (void)b; playTapAt = app_now(); player_toggle_play(); watch_progress_save_now(); keep(); }
 static int can_seek(void);
 static void a_jump(int dir, int b) { (void)b; if (!can_seek()) return; hold_for_seek(); player_seek_dir(dir); seekAt = app_now(); keep(); btnJumps = btnDir == dir && app_now() - btnAt < 1.2 ? btnJumps + 1 : 1; btnDir = dir; btnAt = app_now(); tween_set(&btnA, 0); tween_to(&btnA, 1, 0.45f, EASE_OUT); pplat_haptic(); }
-static double aspAt = -9; static Tween aspK; /* the size just changed: its name shown a moment in its pill */
+static double aspAt = -9; /* the size just changed: its name shown a moment */
 static void a_size(int a, int b) { (void)a; (void)b; player_next_aspect(); keep(); aspAt = app_now(); }
 static void a_next(int a, int b) { (void)a; (void)b; player_next(); }
 static void a_panel(int kind, int b) { (void)b; if (panel == kind) { a_back(0, 0); return; } if (!panel) { orgR = pillR[kind == 3 ? 4 : kind]; srcF = -1; } infoRow = -1; tween_set(&infoA, 0); panel = kind; shownKind = kind; memset(&panV, 0, sizeof panV); memset(&panV2, 0, sizeof panV2); memset(&tabV, 0, sizeof tabV); subStyle = 0;
@@ -860,7 +845,7 @@ int phone_player_finger(const SDL_Event *e) {
     if (G.mode == 11) { G.mode = 0; float pw = fminf(1200.0f, SB_W * 0.52f); if (now - G.lt > 0.08) { TD.vx = TD.vy = 0; } /* (held still before letting go: no throw) */
       float px2 = TD.ox + TD.vx * 0.18f, py2 = TD.oy + TD.vy * 0.18f; /* where the throw would carry it */
       if (px2 > pw * 0.36f || py2 > SB_H * 0.28f) { int kind = panel ? panel : shownKind; TD.on = 2; a_back(0, 0); tween_to(&panA, 0, 0.42f, EASE_WEB); /* far enough: it goes home into its pill, shrinking and rounding as it goes (the controls coming back with it), the pill taking it with a little bounce */
-        pillPulseK = kind == 3 ? 4 : kind; pillPulseAt = app_now() + 0.3; pplat_haptic_k(HK_CLICK, 0.6f); }
+        pplat_haptic_k(HK_CLICK, 0.6f); }
       else { TD.on = 2; } return 1; } /* else home on a spring */
     if (G.mode == 12) G.mode = 0; /* a tap on the title row */
     if (G.mode == 21) { G.mode = 0; G.on = 0; posAt = app_now(); if (hypotf(x - G.x0, y - G.y0) < 16 && x >= posX.x && x < posX.x + posX.w && y >= posX.y && y < posX.y + posX.h) a_posclose(0, 0); else if (posMode && hypotf(x - G.x0, y - G.y0) < 24) for (int i = 0; i < 7; i++) if (x >= szR[i].x && x < szR[i].x + szR[i].w && y >= szR[i].y && y < szR[i].y + szR[i].h) a_style(0, i); return 1; } /* (a tap on ✕: it closes; nothing else does) */
