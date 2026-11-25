@@ -479,7 +479,7 @@ static void try_resume(void) {
     const char *videoId = P.vid[0] ? P.vid : P.id; char key[180]; snprintf(key, sizeof key, "%s|%s", P.id, videoId);
     const cJSON *v = js_obj(store_node("offlineProgress"), key);
     double ms = js_num(v, "position_ms", 0), dm = js_num(v, "duration_ms", 0), sec = ms / 1000.0, d0 = dur();
-    if (sec > 5 && (!dm || !d0 || sec < d0 - 30)) { video_seek(sec); char ft[32]; fmt_time(sec, ft, sizeof ft); snprintf(resumeMsg, sizeof resumeMsg, "%s%s", T("Resuming from "), ft); return; }
+    if (sec > 5 && (!dm || !d0 || sec < d0 - 2)) { video_seek(sec); char ft[32]; fmt_time(sec, ft, sizeof ft); snprintf(resumeMsg, sizeof resumeMsg, "%s%s", T("Resuming from "), ft); return; }
   }
   { float tp = lib_trakt_resume(P.id, P.vid); double d = dur(); if (tp > 0 && d > 0) { double sec = tp * d; /* Trakt's pause, the newer (another app, another device) */
       if (sec > 5 && sec < d - 30) { video_seek(sec); char ft[32]; fmt_time(sec, ft, sizeof ft); snprintf(resumeMsg, sizeof resumeMsg, "%s%s", T("Resuming from "), ft); fprintf(stderr, "[trakt] resumed at Trakt's pause, %.0f %%\n", tp * 100); } return; } }
