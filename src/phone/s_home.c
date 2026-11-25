@@ -281,7 +281,7 @@ static struct {
 } HC;
 static int hc_year(const Item *it) {
   const char *p = it->metaLine;
-  while (p && *p) { if (p[0] >= '1' && p[0] <= '2' && p[1] >= '0' && p[1] <= '9' && p[2] >= '0' && p[2] <= '9' && p[3] >= '0' && p[3] <= '9') { int y = (p[0]-'0')*1000 + (p[1]-'0')*100 + (p[2]-'0')*10 + p[3]-'0'; if (y >= 1890 && y <= 2100) return y; } p++; }
+  while (p && *p) { if (p[0] && p[1] && p[2] && p[3] && p[0] >= '1' && p[0] <= '2' && p[1] >= '0' && p[1] <= '9' && p[2] >= '0' && p[2] <= '9' && p[3] >= '0' && p[3] <= '9') { int y = (p[0]-'0')*1000 + (p[1]-'0')*100 + (p[2]-'0')*10 + p[3]-'0'; if (y >= 1890 && y <= 2100) return y; } p++; }
   return 0;
 }
 static double hc_rating(const Item *it) { const cJSON *m = sb_meta_cached(it->type, it->id); return js_num(m, "imdbRating", js_num(m, "rating", 0)); }
@@ -311,6 +311,15 @@ static void hc_got(ItemList *l, int cached, void *ud) {
   HC.busy = 0;
   if (l) { itemlist_clear(&HC.all); HC.all = *l; free(l); hc_apply(); }
 }
+static void hc_urlenc(const char *src, char *dst, size_t cap) {
+  static const char hex[] = "0123456789ABCDEF"; size_t n = 0;
+  for (const unsigned char *p = (const unsigned char *)src; *p && n + 4 < cap; p++) {
+    unsigned char c = *p;
+    if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~') dst[n++] = (char)c;
+    else { dst[n++] = '%'; dst[n++] = hex[c >> 4]; dst[n++] = hex[c & 15]; }
+  }
+  dst[n] = 0;
+}
 static void hc_query(void) {
   HC.gen++; HC.busy = 1; HC.scroll.pos = HC.scroll.vel = HC.scroll.max = 0; HC.focus = 0;
   itemlist_clear(&HC.all); itemlist_clear(&HC.shown);
@@ -323,7 +332,7 @@ static void hc_query(void) {
     if (!(n >= 6 && !strncmp(p, "genre=", 6))) { size_t used = strlen(clean); if (used && used + 1 < sizeof clean) clean[used++] = '&', clean[used] = 0; if (n < sizeof clean - used) { memcpy(clean + used, p, n); clean[used + n] = 0; } }
     if (!end) break; p = end + 1;
   }
-  if (HC.genre[0]) { size_t n = strlen(clean); snprintf(clean + n, sizeof clean - n, "%sgenre=%s", n ? "&" : "", HC.genre); }
+  if (HC.genre[0]) { char encoded[144]; hc_urlenc(HC.genre, encoded, sizeof encoded); size_t n = strlen(clean); snprintf(clean + n, sizeof clean - n, "%sgenre=%s", n ? "&" : "", encoded); }
   snprintf(HC.query.extra, sizeof HC.query.extra, "%s", clean);
   snprintf(HC.query.url, sizeof HC.query.url, "%s%s%s.json", HC.query.path, clean[0] ? "/" : "", clean);
   sb_catalog(&HC.query, hc_got, (void *)(uintptr_t)HC.gen);
