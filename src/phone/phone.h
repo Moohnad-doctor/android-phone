@@ -37,6 +37,7 @@ void phone_layout(int dw, int dh);
 void phone_finger(const SDL_Event *e, int w, int h);
 void phone_tick(float dt);
 void phone_bar_draw(void);           /* the floating navigation pill (from core/app.c in place of the top bar) */
+float phone_free_top(void);
 /* the row of the page's own choices, just above the bar (filters, chips): filled while the page draws */
 void  ctx_row(HitFn act);            /* act(i, 0) when choice i is tapped */
 void  ctx_add(const char *label, int on);
