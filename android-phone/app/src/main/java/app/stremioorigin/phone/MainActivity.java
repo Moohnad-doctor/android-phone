@@ -30,7 +30,7 @@ public class MainActivity extends SDLActivity {
 
     @Override
     protected String[] getLibraries() {
-        return new String[] {"SDL2", "curl", "main"};
+        return new String[] {"SDL2", "curl", "sbengine", "main"};
     }
 
     @Override
@@ -345,6 +345,7 @@ public class MainActivity extends SDLActivity {
     /* downloads: on Wi-Fi (or a cable) now, and the places they can go (the app's own storage, then each card's) */
     public static boolean onWifi() { MainActivity a = self; if (a == null) return true; try { android.net.ConnectivityManager cm = (android.net.ConnectivityManager) a.getSystemService(Context.CONNECTIVITY_SERVICE);
         android.net.NetworkCapabilities nc = cm.getNetworkCapabilities(cm.getActiveNetwork()); return nc != null && (nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) || nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET)); } catch (Throwable e) { return true; } }
+    public static String internalFilesDir() { MainActivity a = self; return a == null ? "" : a.getFilesDir().getAbsolutePath(); }
     public static String dlDirs() { MainActivity a = self; if (a == null) return ""; StringBuilder b = new StringBuilder(); try { java.io.File[] ds = a.getExternalFilesDirs(android.os.Environment.DIRECTORY_MOVIES);
         for (int i = 0; ds != null && i < ds.length; i++) if (ds[i] != null) { ds[i].mkdirs(); long free = ds[i].getUsableSpace(); b.append(i == 0 ? "phone" : "card").append('\t').append(ds[i].getAbsolutePath()).append('\t').append(free).append('\n'); } } catch (Throwable e) { } return b.toString(); }
     /* the media volume (0..1; below 0: read only) */
