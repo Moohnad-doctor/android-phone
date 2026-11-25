@@ -110,6 +110,23 @@ static float feat_draw(float y) {
 }
 static Board *me(void) { return &B[0]; } /* (one board: Home) */
 static void lib_rows(Board *b) { itemlist_clear(&b->cw); lib_cw_items(&b->cw); itemlist_clear(&b->up); notify_upcoming(&b->up); b->lib = lib_version(); } /* Continue Watching (new episodes too) and Upcoming: from the library */
+static void cw_card_labels(const ItemList *l, const Scroll *s, float y) {
+  if (!l || !s) return; float cw = WIDE_CW * 1.30f, ch = WIDE_CH * 1.30f, gap = 14, top = 52; int rtl = app_rtl();
+  for (int i = 0; i < l->n; i++) {
+    float x = PAD + i * (cw + gap) - s->pos; if (rtl) x = SB_W - x - cw;
+    if (x > SB_W || x + cw < 0) continue;
+    CwInfo info; if (lib_cw_info(&l->items[i], &info) && info.leftMin > 0) {
+      char rem[48]; snprintf(rem, sizeof rem, "متبقي %.0f د", info.leftMin);
+      float bw = text_width(rem, F_TINY, 800, 0) + 24, bx = x + 12, by = y + top + 12;
+      gfx_rrect(bx, by, bw, 34, 17, BLACK_A(190)); text_draw(rem, bx + bw / 2, by + 17 - text_line_height(F_TINY) / 2.0f, F_TINY, 800, WHITE_A(245), 0, 0, ALIGN_CENTER);
+    }
+    if (!strcmp(l->items[i].type, "series")) {
+      int season = 0, episode = 0; const char *sep = strchr(l->items[i].videoId, ':'); if (sep) sscanf(sep + 1, "%d:%d", &season, &episode);
+      if (season > 0 && episode > 0) { char ep[32], label[320]; snprintf(ep, sizeof ep, "S%d E%d", season, episode); snprintf(label, sizeof label, "%s  ·  %s", l->items[i].name, ep); text_draw(label, x + cw / 2, y + top + ch + 5, F_TINY + 1, 700, TXT, 0, cw - 8, ALIGN_CENTER); }
+    } else text_draw(l->items[i].name, x + cw / 2, y + top + ch + 5, F_TINY + 1, 700, TXT, 0, cw - 8, ALIGN_CENTER);
+  }
+}
+
 
 static void got_row(ItemList *l, int cached, void *ud) { (void)cached; unsigned tag = (unsigned)(uintptr_t)ud; Board *b = &B[tag >> 24]; int i = (tag >> 8) & 255; if ((tag & 255) != (b->gen & 255) || i >= b->n || !l) { if (l) itemlist_free(l); return; }
   HRow *r = &b->rows[i]; if (!l->n && l->total < 0 && !r->list.n && r->retries < 3) { static const double W[3] = { 8, 20, 45 }; r->retryAt = app_now() + W[r->retries]; r->retries++; itemlist_free(l); fprintf(stderr, "[home] %s: no answer, asked again in %.0f s\n", r->def.title, W[r->retries - 1]); return; } /* (an addon that makes its lists on demand: a slow first answer is not the end of the row) */
@@ -182,7 +199,7 @@ static void draw(void) {
     static ItemList cwF; static int fKey = -1, fN = -1; static const Item *fP;
     if (fKey != b->filter || fN != b->cw.n || fP != b->cw.items) { fKey = b->filter; fN = b->cw.n; fP = b->cw.items; itemlist_clear(&cwF); cwF.items = calloc(b->cw.n ? b->cw.n : 1, sizeof(Item)); cwF.n = 0;
       for (int i = 0; i < b->cw.n; i++) if (b->filter == 0 || !strcmp(b->cw.items[i].type, b->filter == 1 ? "series" : "movie")) cwF.items[cwF.n++] = b->cw.items[i]; }
-    { static float cwK = -1; if (cwF.n > 0) b->lastY[0] = y + b->v.pos; y += row_draw_k(T("Continue Watching"), b->filter ? &cwF : &b->cw, 1, y, &b->cws, -2, focus, b->fr == -2 ? b->fi : -1, &cwK); } }
+    { static float cwK = -1; const ItemList *watch = b->filter ? &cwF : &b->cw; float rowY = y; if (cwF.n > 0) b->lastY[0] = y + b->v.pos; y += row_draw_k(T("Continue Watching"), watch, 1, y, &b->cws, -2, focus, b->fr == -2 ? b->fi : -1, &cwK); cw_card_labels(watch, &b->cws, rowY); } }
   { static Scroll lvS; if (!b->filter) y += ph_live_row(y, &lvS, -5, focus, b->fr == -5 ? b->fi : -1); } /* a live addon on: its channels, All channels first */
   { static float upK = -1; if (b->filter != 2) y += row_draw_k(T("Upcoming episodes"), &b->up, 1, y, &b->ups, -4, focus, b->fr == -4 ? b->fi : -1, &upK); } /* the library's series airing in the next two weeks: wide cards as the TV's, the episode named on it and when it airs in a chip (Today, Tomorrow, In 3 days) */
   int waiting = 0;
