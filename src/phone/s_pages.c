@@ -250,7 +250,7 @@ static float dl_card(int i, float y, float ink) {
   int open = grp && is_open(key); static Tween opT[96]; tween_to(&opT[ri], open ? 1 : 0, 0.34f, EASE_WEB); tween_tick(&opT[ri], phDt); float ok = opT[ri].v;
   float h = 236, rowH = 96, extra = grp ? (cnt * rowH + 12) * ok : 0;
   float fold = R->gone ? clampf((float)((app_now() - R->goneAt - 0.18) / 0.28), 0, 1) : 0; fold = fold * fold * (3 - 2 * fold); float H = (h + extra) * (1 - fold);
-  if (R->gone && fold >= 1) { if (grp) del_grp(d->id, d->group); else del_vid(d->id, d->vid); toast(T("Deleted"), 1400, NULL); R->gone = 0; R->sx = 0; return 0; }
+  if (R->gone && fold >= 1) { if (grp) del_grp(d->id, key); else del_vid(d->id, d->vid); toast(T("Deleted"), 1400, NULL); R->gone = 0; R->sx = 0; return 0; }
   gfx_opacity_push(ink * (1 - fold)); gfx_offset_push(0, 40 * (1 - ink));
   if (y + H > -20 && y < SB_H && H > 4) { gfx_clip_push(0, y, SB_W, H);
     tween_to(&R->sel, selMode ? 1 : 0, 0.3f, EASE_WEB); tween_tick(&R->sel, phDt); float sk = R->sel.v, inset = 64 * sk; /* Select: a round tick slides in on the left */
@@ -341,7 +341,7 @@ static void dl_draw(void) {
     text_draw(T("Nothing downloaded yet"), SB_W / 2, cy + 128, F_H2 - 2, 800, TXT, -0.2f, SB_W - 2 * PAD, ALIGN_CENTER);
     text_draw_wrapped(T("Use Download on a film or an episode: it plays here without a connection."), SB_W / 2, cy + 190, SB_W - 2 * PAD - 40, 4, F_BODY, 500, TXT2, 0, ALIGN_CENTER, 34); y = cy + 300; }
   int shown = 0;
-  for (int i = 0; i < n; i++) { const Dl *d = ph_dl_get(i); if (d->group[0] && grp_count(d) > 1) { int first = 1; for (int j = 0; j < i; j++) if (same_grp(ph_dl_get(j), d)) first = 0; if (!first) continue; } /* a season: one card */
+  for (int i = 0; i < n; i++) { const Dl *d = ph_dl_get(i); if (grp_count(d) > 1) { int first = 1; for (int j = 0; j < i; j++) if (same_grp(ph_dl_get(j), d)) first = 0; if (!first) continue; } /* a season: one card */
     float ink = clampf((float)((app_now() - dlIn - 0.05 - shown * 0.06) / 0.4), 0, 1); ink = 1 - (1 - ink) * (1 - ink) * (1 - ink); shown++;
     y += dl_card(i, y, ink); n = ph_dl_count(); }
   tween_to(&selT, selMode ? 1 : 0, 0.3f, EASE_WEB); tween_tick(&selT, phDt);
