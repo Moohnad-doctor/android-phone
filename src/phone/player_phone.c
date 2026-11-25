@@ -84,6 +84,50 @@ static void keep(void) { hideAt = app_now() + 4.5; }
 static int ui_on(void) { return uiA.to > 0.5f; }
 static void ui_show(int on) { tween_to(&uiA, on ? 1 : 0, on ? 0.2f : 0.3f, EASE_CSS_EASE); if (on) keep(); }
 static void fmt(double t, char *o, size_t cap) { int s = (int)(t < 0 ? 0 : t); if (s >= 3600) snprintf(o, cap, "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60); else snprintf(o, cap, "%d:%02d", s / 60, s % 60); }
+/* Download playback is resumable without a network or account. Keys are stable across app
+   launches and use the same content/episode identity as the download registry. */
+static char watchActive[180];
+static double watchSavedAt;
+static int watchResumePending, watchLastPaused = -1;
+static int watch_is_local(const Stream *st) {
+  return st && (!strncmp(st->url, "file:", 5) || !strncmp(st->url, "http://127.0.0.1", 16));
+}
+static void watch_keys(const Item *it, const char *vid, char *pk, size_t pc, char *dk, size_t dc) {
+  snprintf(pk, pc, "watch.%s.%s.position_ms", it->id, vid);
+  snprintf(dk, dc, "watch.%s.%s.duration_ms", it->id, vid);
+}
+static void watch_progress_save_now(void) {
+  Item it; char vid[96]; const Stream *st;
+  if (!player_now(&it, vid, sizeof vid, &st) || !watch_is_local(st) || !player_live()) return;
+  double pos = player_time(), dur = player_dur(); if (dur <= 0 || pos < 0) return;
+  char pk[240], dk[240]; watch_keys(&it, vid, pk, sizeof pk, dk, sizeof dk);
+  if (pos > dur) pos = dur;
+  store_set_num(pk, pos * 1000.0); store_set_num(dk, dur * 1000.0); store_flush();
+  watchSavedAt = app_now(); watchLastPaused = player_paused();
+}
+static void watch_progress_tick(void) {
+  Item it; char vid[96]; const Stream *st;
+  if (!player_now(&it, vid, sizeof vid, &st) || !watch_is_local(st)) {
+    watchActive[0] = 0; watchResumePending = 0; watchLastPaused = -1; return;
+  }
+  char identity[180], pk[240], dk[240];
+  snprintf(identity, sizeof identity, "%s|%s", it.id, vid);
+  watch_keys(&it, vid, pk, sizeof pk, dk, sizeof dk);
+  if (strcmp(identity, watchActive)) {
+    snprintf(watchActive, sizeof watchActive, "%s", identity);
+    watchResumePending = 1; watchSavedAt = app_now(); watchLastPaused = player_paused();
+  }
+  if (!player_live()) return;
+  double dur = player_dur();
+  if (watchResumePending) {
+    if (dur <= 0) return;
+    double saved = store_num(pk, 0) / 1000.0, savedDur = store_num(dk, 0) / 1000.0;
+    if (saved > 2.0 && savedDur > 0 && saved < dur - 20.0) player_seek_to(saved);
+    watchResumePending = 0; watchSavedAt = app_now();
+  }
+  int paused = player_paused();
+  if (paused != watchLastPaused || app_now() - watchSavedAt >= 1.5) watch_progress_save_now();
+}
 
 /* ---- the pieces ---- */
 /* every surface of the player: the film's own liquid glass (bent as the picture moves behind it) with a tint for its
@@ -115,12 +159,12 @@ static float pill(float x, float y, const char *icon, const char *label, int lit
 
 /* ---- the actions ---- */
 static void a_keep(int a, int b) { (void)a; (void)b; keep(); }
-static void a_back(int a, int b) { (void)a; (void)b; if (infoRow >= 0) { infoRow = -1; tween_to(&infoA, 0, 0.2f, EASE_CSS_EASE); return; } if (panel) { void ph_live_panel_state(int on); ph_live_panel_state(0); player_tray_close(); panel = 0; tween_to(&panA, 0, 0.3f, EASE_WEB); ui_show(1); return; } player_back(); } /* the panel shrinks back into its pill; the controls come back */
+static void a_back(int a, int b) { (void)a; (void)b; if (infoRow >= 0) { infoRow = -1; tween_to(&infoA, 0, 0.2f, EASE_CSS_EASE); return; } if (panel) { void ph_live_panel_state(int on); ph_live_panel_state(0); player_tray_close(); panel = 0; tween_to(&panA, 0, 0.3f, EASE_WEB); ui_show(1); return; } watch_progress_save_now(); player_back(); } /* the panel shrinks back into its pill; the controls come back */
 /* the cast button: what plays goes to the TV, from here (connected: at once, the phone's player shut; else the TVs, then
    there once one is connected); a download played from the phone: its own link (the TV can't reach the phone's file) */
 static void a_tv(int a, int b) { (void)a; (void)b; keep(); Item it; char vid[96]; const Stream *st; if (!player_now(&it, vid, sizeof vid, &st)) { cast_open(); return; }
   Stream s2 = *st; if (!strncmp(s2.url, "file:", 5) || !strncmp(s2.url, "http://127.0.0.1", 16)) { extern const Dl *ph_dl_find(const char *id, const char *vid); const Dl *d = ph_dl_find(it.id, vid); if (!d || !d->url[0]) { cast_open(); return; } snprintf(s2.url, sizeof s2.url, "%s", d->url); s2.p2p = !strncmp(d->url, "p2p://", 6); }
-  pplat_haptic_k(HK_TICK, 0.6f); int was = cast_connected(); cast_play(&s2, it.type, it.id, vid, player_time()); if (was) player_back(); }
+  pplat_haptic_k(HK_TICK, 0.6f); watch_progress_save_now(); int was = cast_connected(); cast_play(&s2, it.type, it.id, vid, player_time()); if (was) player_back(); }
 extern int player_now(Item *it, char *vid, size_t vcap, const Stream **st);
 static int dlMode; /* the download button: 0 none (a torrent played: it downloads from Downloads only), 1 all, 2 a torrent download played: its card on a tap, nothing else */
 static int dlOpen; static Tween dlOpenT;
@@ -130,7 +174,7 @@ static void a_dl(int a, int b) { (void)a; (void)b; if (dlMode == 2) { dlOpen = !
   char ep[200] = ""; { int se = 0, e = 0; const char *c = strchr(vid, ':'); if (c && sscanf(c, ":%d:%d", &se, &e) == 2) snprintf(ep, sizeof ep, "S%d E%d", se, e); }
   if (ph_dl_add_quiet(&it, vid, ep, st)) pplat_haptic(); } /* (a torrent playing: it keeps what plays from now on, the film as it is) */
 static void a_zap(int sd, int b) { (void)b; keep(); live_zap(sd > 0 ? 1 : -1); pplat_haptic_k(HK_TICK, 0.6f); } /* a channel: the next one, or the one before */
-static void a_todl(int a, int b) { (void)a; (void)b; player_back(); app_go(SCR_DISC, NULL, 1); }
+static void a_todl(int a, int b) { (void)a; (void)b; watch_progress_save_now(); player_back(); app_go(SCR_DISC, NULL, 1); }
 #define TOPY 74.0f
 #define TOPR 26.0f
 #define DLX (SB_W - 320)
@@ -546,7 +590,7 @@ static void prompt_draw(float osd) {
   gfx_opacity_pop();
 }
 void phone_player_draw(void) {
-  nhit = 0; nholds = 0; { static char last[16]; const char *m = player_aspect(); if (strcmp(m, last)) { snprintf(last, sizeof last, "%s", m); void video_size_mode(const char *mode); video_size_mode(m); } } /* the picture's size: libVLC's own scaling */ int play = !player_paused() || seekHeld; /* (a seek holding the film: it plays on after) */
+  watch_progress_tick(); nhit = 0; nholds = 0; { static char last[16]; const char *m = player_aspect(); if (strcmp(m, last)) { snprintf(last, sizeof last, "%s", m); void video_size_mode(const char *mode); video_size_mode(m); } } /* the picture's size: libVLC's own scaling */ int play = !player_paused() || seekHeld; /* (a seek holding the film: it plays on after) */
   { extern int player_failed(void); int lv = player_live();
     if (!lv && !locked) { if (player_failed()) { if (!ui_on()) ui_show(1); keep(); } else if (ui_on() && !panel) ui_show(0); } /* the first loading is the title's art, its logo and line alone: no controls over it (a failure brings them back, for Back and Sources) */ }
   if (ui_on() && play && !panel && !G.on && app_now() > hideAt) ui_show(0);
@@ -806,7 +850,7 @@ int phone_player_finger(const SDL_Event *e) {
       if (fabsf(dx) > fabsf(dy) && !can_seek()) G.mode = 8; /* (loading: a sideways slide does nothing) */
       else if (fabsf(dx) > fabsf(dy)) { G.mode = 1; hold_for_seek(); G.scrub0 = player_time(); scrubT = (float)G.scrub0; tween_to(&bubA, 1, 0.15f, EASE_CSS_EASE); } /* (the controls stay as they were: hidden, the bubble alone says where) */
       else if (dy < 0 && G.x0 > SB_W * 0.25f && G.x0 < SB_W * 0.75f) G.mode = 8; /* up from the middle: nothing (only a swipe down closes the player) */
-      else if (dy > 0 && (!player_live() || (G.x0 > SB_W * 0.25f && G.x0 < SB_W * 0.75f))) { { /* down closes it (loading: from anywhere; playing: from the middle, the sides being brightness and sound) */ cDir = 1; G.mode = 10; cMode = 1; cV = 0; G.y0 = y; G.lt = now; pplat_haptic_k(HK_TICK, 0.3f); } } /* from the middle (loading: anywhere), downwards: the player as a card under the finger */
+      else if (dy > 0 && (!player_live() || (G.x0 > SB_W * 0.25f && G.x0 < SB_W * 0.75f))) { { /* down closes it (loading: from anywhere; playing: from the middle, the sides being brightness and sound) */ watch_progress_save_now(); cDir = 1; G.mode = 10; cMode = 1; cV = 0; G.y0 = y; G.lt = now; pplat_haptic_k(HK_TICK, 0.3f); } } /* from the middle (loading: anywhere), downwards: the player as a card under the finger */
       else { G.mode = G.x0 < SB_W / 2 ? 2 : 3; lvlKind = G.mode; G.v0 = G.mode == 2 ? pplat_brightness(-1) : vBoost > 1.001f ? vBoost : pplat_volume(-1); lvl = G.v0; tween_to(&lvlA, 1, 0.15f, EASE_CSS_EASE); } }
     if (G.mode == 1) { double d = player_dur(), span = d > 0 ? (d < 600 ? d : 600) : 0; scrubT = (float)(G.scrub0 + dx / SB_W * span); if (scrubT < 0) scrubT = 0; if (d > 0 && scrubT > d) scrubT = (float)d; }
     else if (G.mode == 2) { lvl = clampf(G.v0 - dy / (SB_H * 0.6f), 0, 1); lvlDirty = 1; } /* (the meter follows at once; the screen's brightness is set a few times a second: each set lays the window out again) */
