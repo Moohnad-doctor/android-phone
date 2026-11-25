@@ -1,5 +1,5 @@
 /* Settings: the account, the addons, how films play, subtitles, audio, the look, the language, and About
-   (version, updates, what's new, the log code). The same keys the TV changes, so an account's phone and TV agree
+   (version, updates, the log code). The same keys the TV changes, so an account's phone and TV agree
    where the setting is the account's; the rest is this phone's. */
 void board_invalidate(void); /* (the phone's Home: rows built again on its next visit) */
 #include "core/traktrows.h"
