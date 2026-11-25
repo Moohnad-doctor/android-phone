@@ -125,6 +125,7 @@ float press_k(float x, float y, float w, float h) { scr_rect(&x, &y, &w, &h);
 }
 /* where the free room ends at the bottom: above the bar (and its row of choices when it shows), above the player's controls */
 float phone_free_bottom(void) { if (player_open()) return SB_H - 210; return SB_H - INS_B - 40; }
+float phone_free_top(void) { return barTop > INS_T ? barTop + 24 : INS_T + 130; }
 /* the finger now, for a grid that is held and slid across (Appearance's colours): where, where it touched, whether it
    rests long enough to be a hold (then the page no longer scrolls under it) */
 int ph_finger(float *x, float *y, float *x0, float *y0, int *held) { *x = F.x; *y = F.y; *x0 = F.x0; *y0 = F.y0; *held = F.pressed && !F.drag; return F.down; }
