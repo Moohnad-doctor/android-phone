@@ -121,7 +121,9 @@ jobs:
           import yaml
 
           with open(".github/workflows/build-apk.yml", encoding="utf-8") as stream:
-              yaml.safe_load(stream)
+              workflow = stream.read()
+          yaml.safe_load(workflow)
+          assert "android-actions/" + "setup-android" not in workflow
           ET.parse("android-phone/app/src/main/AndroidManifest.xml")
           ET.parse("android-phone/app/src/main/res/values/strings.xml")
           print("Workflow YAML and Android XML resources parse successfully")
@@ -130,7 +132,6 @@ jobs:
             echo "A macOS NDK host path remains in the Android build scripts" >&2
             exit 1
           fi
-          ! grep -q 'android-actions/setup-android' .github/workflows/build-apk.yml
 
       - name: Validate phone shell scripts
         shell: bash
