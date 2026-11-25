@@ -185,8 +185,6 @@ static void xp_act(int a, int b) { (void)a; (void)b; char buf[4000]; pplat_video
 static void addon_open(int i, int b) { (void)b; adSel = i; ph_sheet_open(&adSheet); }
 static void check_act(int a, int b) { (void)a; (void)b; update_check(1); }
 static void install_act(int a, int b) { (void)a; (void)b; update_install(); } /* downloaded, its SHA-256 checked, handed to the system's installer */
-static void news_act(int a, int b) { (void)a; (void)b; void ph_whatsnew_show(void); ph_whatsnew_show(); }
-static void url_act(int a, int b) { (void)b; const char *u = a == 2 ? "https://discord.gg/SJEtyV3kW6" : a ? welcome_github_url() : welcome_support_url(); if (u && *u && !pplat_open_url(u)) toast(u, 3000, NULL); }
 static void swatch_act(int i, int b) { (void)b; store_set("accent", i == 0 ? "logo" : i == 1 ? "adaptive" : ACCENT_KEYS[i - 2]); accent_apply(); }
 /* Share logs, as on the TV: the logs sealed (only the developer can open them) and left on the relay; the 4-letter
    code finds them. A sheet says so, shows the code (the same one for 10 minutes), and opens a new issue with it in */
@@ -390,12 +388,8 @@ static float main_list(float y) {
       int sup = welcome_support_url()[0] != 0, gh = welcome_github_url()[0] != 0; y += head(y, T("Account and system")); grp(y, 3);
       { char n[16]; snprintf(n, sizeof n, "%d", sb_addon_on_count()); nav_row(y, "st_addon", TINT_PINK, T("Addons"), T1("{n} on", "n", n), P_ADDONS); y += RH; }
       { int ts = scrobble_state(); nav_row(y, "trakt", RGB(0x64, 0x38, 0xd0), "Trakt", ts == TRAKT_LINKED ? (scrobble_user()[0] ? scrobble_user() : T("Connected")) : NULL, P_TRAKT); y += RH; }
-      { const char *av = update_avail(); nav_row(y, "st_about", av ? TINT_GREEN : TINT_GREY, T("About"), av ? T1("Version {v} is available", "v", av) : T("Version, updates, logs and support"), P_ABOUT); if (av) gfx_circle(gx + gw - 26 - 32 - 22, y + RH / 2, 8, RGB(0x34, 0xc7, 0x59)); } /* (a newer version out: its green dot, beside the row that installs it) */
+      { const char *av = update_avail(); nav_row(y, "st_about", av ? TINT_GREEN : TINT_GREY, T("About"), av ? T1("Version {v} is available", "v", av) : T("Version and updates"), P_ABOUT); if (av) gfx_circle(gx + gw - 26 - 32 - 22, y + RH / 2, 8, RGB(0x34, 0xc7, 0x59)); } /* (a newer version out: its green dot, beside the row that installs it) */
       y = grp_end();
-      { y += head(y, T("Support the project")); grp(y, 1 + sup + gh); /* under About, on the first page, with its own heading */
-        act_row(y, "discord", RGB(0x58, 0x65, 0xf2), T("Join our Discord"), NULL, url_act, 2); y += RH;
-        if (sup) { act_row(y, "ph_heart", TINT_PINK, T("Support on Ko-fi"), NULL, url_act, 0); y += RH; }
-        if (gh) { act_row(y, "ph_star", TINT_GOLD, T("Star on GitHub"), NULL, url_act, 1); y += RH; } y = grp_end(); }
       /* the account at the foot: the address, and on its right the way out (or in) */
       { grp(y, 1); const char *em = in ? sb_user_email() : T("Not signed in"); float x = gx + 26; icon_draw("st_user", x, y + RH / 2 - 22, 44, WHITE_A(215));
         text_draw(em, x + 70, y + RH / 2 - text_line_height(F_BODY) / 2.0f, F_BODY, 700, TXT, 0, gw - 26 - 80 - 110, ALIGN_START);
@@ -539,19 +533,12 @@ static float page_body(int pg, float y, const char **titleOut) { const char *tit
     case P_ABOUT: { title = T("About"); const char *av = update_avail(); int st = update_state();
       /* the app: its mark and version */
       { float cx = SB_W / 2; gfx_rrect_v(cx - 56, y, 112, 112, 56, RGB(0x6a, 0x45, 0xe0), RGB(0x2f, 0x1a, 0x9e)); icon_draw("o_play", cx - 40, y + 14, 84, WHITE_A(255));
-        text_draw("Stremio Origin", cx, y + 132, F_H2, 800, TXT, -0.3f, 0, ALIGN_CENTER); text_draw(T1("Version {v}", "v", update_current()), cx, y + 180, F_SMALL, 600, TXT3, 0, 0, ALIGN_CENTER); y += 240; }
-      int nr = 2 + (av ? 1 : 0) + (update_note_count() || 1 ? 1 : 0); grp(y, nr);
+        text_draw("myth", cx, y + 132, F_H2, 800, TXT, -0.3f, 0, ALIGN_CENTER); text_draw(T1("Version {v}", "v", update_current()), cx, y + 180, F_SMALL, 600, TXT3, 0, 0, ALIGN_CENTER); y += 240; }
+      int nr = 1 + (av ? 1 : 0) + 1; grp(y, nr);
       if (av) { act_row(y, "st_update", TINT_GREEN, st == UPD_INSTALLING ? T1("Installing version {v}…", "v", av) : T1("Install version {v}", "v", av), update_msg()[0] ? update_msg() : T("Downloads, checks and installs it; the app opens again by itself"), install_act, 0); y += RH; }
       act_row(y, "st_update", TINT_BLUE, T("Check for updates"), st == UPD_CHECKING ? T("Checking for updates…") : st == UPD_ERROR ? T("Could not check for updates") : av ? T1("Version {v} is available", "v", av) : st == UPD_NONE ? T("You have the latest version") : "", check_act, 0); y += RH;
       act_row(y, "st_new", TINT_PURPLE, T("What\xe2\x80\x99s new"), T1("Version {v}", "v", update_current()), news_act, 0); y += RH;
       act_row(y, "st_logs", TINT_GREY, T("Share logs"), S.code[0] ? T1("Code {c}: give it with what happened", "c", S.code) : T("Share the code and describe the issue"), logs_act, 0); y = grp_end();
-      { /* the fine print, in short points: what it is, what it is not, TMDB's credit (their logo and their words) */
-        static const char *PTS[] = { "Unofficial client for Stremio addons. Stremio is a trademark of its owner; this app is not affiliated with it.",
-          "This product uses the TMDB API but is not endorsed or certified by TMDB",
-          "It hosts, stores and shares no films or series: it plays what your addons return." };
-        float tx = PAD + 34, tw = SB_W - 2 * PAD - 44;
-        for (int i = 0; i < 3; i++) { gfx_circle(PAD + 16, y + 15, 3.5f, TXT3); int nl = text_draw_wrapped(T(PTS[i]), tx, y, tw, 4, F_SMALL - 1, 500, TXT3, 0, ALIGN_START, 28); y += nl * 28 + 14; }
-        y += 90; }
       break; }
   }  *titleOut = title; return y; }
 static Scroll sb; static int sbWas, sbGo, sbLanded; static float sbX; /* sb: a swipe back on a sub-page (its pos goes negative as the finger moves right); Back runs the same slide */
