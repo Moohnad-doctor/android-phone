@@ -8,7 +8,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 ABI="${1:-arm64-v8a}"; API="${API:-21}"
 PRIV="$HOME/stremiobrew-build"
 NDK="${NDK:-$PRIV/android/sdk/ndk/27.2.12479018}"
-SDLSRC="${SDLSRC:-$PRIV/mac/SDL2-2.30.12}"
+SDLSRC="${SDLSRC:-$PRIV/src/SDL2-2.30.12}"
 W="$PRIV/android/work/$ABI"; OUT="$ROOT/build/phone-$ABI/deps"; mkdir -p "$W" "$OUT/lib" "$OUT/include"
 TC=(-DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" -DANDROID_ABI="$ABI" -DANDROID_PLATFORM="android-$API" -DCMAKE_BUILD_TYPE=MinSizeRel -G Ninja)
 FL="-ffile-prefix-map=$PRIV=/deps -ffile-prefix-map=$ROOT=/app"   # no local paths in the libraries (the sources, the NDK and the work folders all live under $PRIV: one map each, never overlapping, so no order decides)
