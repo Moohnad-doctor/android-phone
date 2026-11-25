@@ -716,25 +716,7 @@ index 7e07ad0..7589d65 100644
      const auto& focused = demands.back();
      result.focused_demand_id = focused.id;
      result.cold = focused.kind == DemandKind::prefetch || focused.cold;
-@@ -40,6 +77,9 @@
-     const auto critical_bytes = result.cold
-         ? std::uint64_t{0}
-         : std::min(
--              window.critical_bytes,
--              static_cast<std::uint64_t>(window.critical_piece_limit) * focused.piece_size
-+              std::max(window.critical_bytes, focused.file_size / 50),
-+              std::min(
-+                  static_cast<std::uint64_t>(window.critical_piece_limit) * focused.piece_size,
-+                  focused.file_size
-+              )
-           );
-@@ -66,4 +106,4 @@
-     const auto index_bytes = std::min(
--        std::max(window.tail_bytes, focused.file_size / 64),
-+        std::max(window.tail_bytes, focused.file_size / 100),
-         focused.file_size
-     );
-@@ -124,6 +164,7 @@ StreamDemandPlan build_stream_demand_plan(
+@@ -124,6 +161,7 @@ StreamDemandPlan build_stream_demand_plan(
              result.deadline_order.push_back(piece);
          }
      }
@@ -1819,15 +1801,6 @@ index 3e218b9..85e5b6f 100644
  #include <atomic>
  #include <chrono>
  #include <cctype>
-@@ -46,5 +47,5 @@
- constexpr std::uint64_t critical_window_bytes = 8 * 1024 * 1024;
--constexpr std::uint32_t critical_piece_limit = 16;
-+constexpr std::uint32_t critical_piece_limit = 512;
- constexpr std::uint64_t playback_window_bytes = 32 * 1024 * 1024;
--constexpr std::uint64_t minimum_readahead_bytes = 64 * 1024 * 1024;
--constexpr std::uint64_t maximum_readahead_bytes = 256 * 1024 * 1024;
-+constexpr std::uint64_t minimum_readahead_bytes = 96 * 1024 * 1024;
-+constexpr std::uint64_t maximum_readahead_bytes = 384 * 1024 * 1024;
 @@ -59,6 +60,79 @@ std::uint64_t readahead_for_disk_budget(const std::uint64_t disk_capacity_bytes)
      );
  }
