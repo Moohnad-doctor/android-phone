@@ -112,6 +112,12 @@ jobs:
           keytool -list -keystore "$HOME/.android/debug.keystore" \
             -storepass android -alias androiddebugkey >/dev/null
 
+      - name: Validate phone shell scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n tools/phone/*.sh
+
       - name: Build native dependencies (arm64-v8a only)
         shell: bash
         run: |
