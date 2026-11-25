@@ -617,7 +617,7 @@ void phone_player_draw(void) {
     int lv = live_now(); /* a live broadcast: LIVE in red where the time left was, the bar full, no knob */
     char tl[24], tr[24]; fmt(t, tl, sizeof tl); fmt(d > t ? d - t : 0, tr + 1, sizeof tr - 1); tr[0] = '-'; if (d <= 0) snprintf(tr, sizeof tr, "--:--");
     if (lv) { snprintf(tr, sizeof tr, "%s", T("LIVE")); text_draw(tr, x1 + 24, by - text_line_height(26) / 2.0f + 2, 26, 800, RGB(0xff, 0x4d, 0x4d), 0.5f, 0, ALIGN_START); }
-    else { text_draw(tl, x0 - 24, by - text_line_height(26) / 2.0f + 2, 26, 700, WHITE_A(235), 0, 0, ALIGN_END); text_draw(tr, x1 + 24, by - text_line_height(26) / 2.0f + 2, 26, 700, WHITE_A(200), 0, 0, ALIGN_START); }
+    else { text_draw(tl, x0 - 24, by - text_line_height(26) / 2.0f + 2, 26, 700, WHITE_A(235), 0, 0, ALIGN_RIGHT); text_draw(tr, x1 + 24, by - text_line_height(26) / 2.0f + 2, 26, 700, WHITE_A(200), 0, 0, ALIGN_LEFT); }
     float pd = d > 0 ? clampf((float)(t / d), 0, 1) : 0;
     if (lv) { gfx_rrect(x0, by - 5, bw, 10, 5, RGB(0xff, 0x4d, 0x4d)); } else {
     float pb = d > 0 ? (float)(player_buffered() / d) : 0; pb = clampf(pb, 0, 1); float th = G.mode == 4 || G.mode == 1 ? 14 : 10;

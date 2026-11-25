@@ -31,10 +31,11 @@ static float colX; static int colOn; /* (a sheet in its column: below) */
 #define FULLW (SB_W + (colOn ? 2 * colX : 0)) /* the whole screen's width, a sheet in its column or not */
 void phone_layout(int dw, int dh) { lastDw = dw; lastDh = dh;
   if (dw > dh && !phPlayerLayout) { /* sideways, the pages: the same size of things as upright (1.75 units per dp), more room across */
-    float d = pplat_density(); pxPerUnit = d > 0 ? d / 1.75f : 1; if (pxPerUnit < 0.5f) pxPerUnit = 0.5f;
-    { float uh = dh / pxPerUnit; if (uh > TABW_H) { float th = TABW_H + (uh - TABW_H) * 0.4f; pxPerUnit = dh / th; } } /* a tablet held sideways: things grow with the screen (held further off than a phone), 7" as it was, a 10" a fifth bigger, a 13" a third */
+    float d = pplat_density(); int tablet = d > 0 && fminf(dw, dh) / d >= 600.0f;
+    pxPerUnit = d > 0 ? d / 1.75f : 1; if (pxPerUnit < 0.5f) pxPerUnit = 0.5f;
+    { float uh = dh / pxPerUnit; if (uh > TABW_H) { float th = TABW_H + (uh - TABW_H) * 0.4f; if (tablet) th /= 0.88f; pxPerUnit = dh / th; } } /* tablets keep the same physical UI size instead of enlarging cards and text */
     sb_layout_w = floorf(dw / pxPerUnit); sb_layout_h = floorf(dh / pxPerUnit); }
-  else if (dw > dh) { sb_layout_h = 900; sb_layout_w = floorf(900.0f * dw / dh); pxPerUnit = dh / 900.0f; } /* sideways (a film): the TV player's layout, in 900 rows (a fifth bigger than the TV's 1080: a phone is held close but it is small) */
+  else if (dw > dh) { float d = pplat_density(); int tablet = d > 0 && fminf(dw, dh) / d >= 600.0f; sb_layout_h = tablet ? (int)ceilf(900.0f / 0.88f) : 900; sb_layout_w = floorf((float)sb_layout_h * dw / dh); pxPerUnit = dh / (float)sb_layout_h; } /* sideways player: a larger logical viewport on tablets keeps controls compact */
   else { /* upright: 1.75 units per dp, so every phone shows things at the same physical size (720 on a 411 dp phone); a
             tablet or an unfolded phone gets more room, not bigger things */
     float d = pplat_density(); float dp = d > 0 ? dw / d : 411; sb_layout_w = floorf(clampf(dp * 1.75f, 640, 1800)); pxPerUnit = dw / sb_layout_w; sb_layout_h = floorf(dh / pxPerUnit); }
