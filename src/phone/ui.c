@@ -4,6 +4,7 @@
 #include <string.h>
 #include <math.h>
 #include "phone/phone.h"
+#include "core/tmdb.h"
 #include "core/keys.h"
 #include "core/i18n.h"
 #include "ui/text.h"
@@ -30,12 +31,24 @@ void ph_leave(const Item *it, int scope, int act) { int f = 0; for (int i = 0; i
 static float leave_k(const Item *it, int scope) { for (int i = 0; i < 8; i++) if (LV[i].id[0] && LV[i].scope == scope && !strcmp(LV[i].id, it->id)) { float k = (float)((app_now() - LV[i].at) / LEAVE_S); k = k < 0 ? 0 : k > 1 ? 1 : k; return k * k * (3 - 2 * k); } return 0; }
 void ph_leave_tick(void) { extern void ph_leave_done(const Item *it, int act); for (int i = 0; i < 8; i++) if (LV[i].id[0] && LV[i].act && app_now() - LV[i].at >= LEAVE_S) { int a = LV[i].act; LV[i].act = 0; ph_leave_done(&LV[i].it, a); }
   for (int i = 0; i < 8; i++) if (LV[i].id[0] && app_now() - LV[i].at > 1.5) LV[i].id[0] = 0; } /* (kept a moment after: the list rebuilt without it, no jump back) */
+static Item phone_localized_item(const Item *src) {
+  Item out = *src;
+  if (app_rtl() && (!strcmp(src->type, "movie") || !strcmp(src->type, "series")) && src->id[0]) {
+    tmdb_wanted(src->type, src->id, 1, 0);
+    const TmdbLoc *loc = tmdb_loc(src->type, src->id);
+    if (loc) {
+      if (loc->title && *loc->title) snprintf(out.name, sizeof out.name, "%s", loc->title);
+      if (loc->poster && *loc->poster) snprintf(out.poster, sizeof out.poster, "%s", loc->poster);
+    }
+  }
+  return out;
+}
 void card_at(const Item *it, float x, float y, float w, float h, int wide, int label, unsigned long long key, int pressed) {
   if (x > SB_W || x + w < 0 || y > SB_H || y + h < 0) return;
   int coll = !strcmp(it->type, "collection"); float hold = pressed && !coll ? app_hold_progress() : 0, r = wide ? 12 : 14; if (!pressed && press_k(x, y, w, h) > 0.2f) pressed = 1; /* (a collection: no hold's glow, it has no menu) */
   if (coll && pressed) x += app_card_shake_dx(); /* (held anyway: a short soft shake) */
   lift_begin_z(key, pressed, hold, x, y, w, h, r, 0.04f);
-  card_draw_wh(it, x, y, w, h, wide, label, 1);
+  Item displayItem = phone_localized_item(it); card_draw_wh(&displayItem, x, y, w, h, wide, label, 1);
   lift_end(key, x, y, w, h, r);
   if (hold > 0) hold_trace_draw(x, y, w, h, r, hold);
 }
