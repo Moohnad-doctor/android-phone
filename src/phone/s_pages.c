@@ -3,6 +3,7 @@
 #include <time.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include "phone/phone.h"
 #include "ui/img.h"
 #include "core/keys.h"
@@ -418,6 +419,33 @@ Screen phLib = { lib_enter, NULL, lib_key, lib_tick, lib_draw, lib_focused, NULL
 /* ---- Search ---- */
 #define MAXQ 256
 static struct { char q[160]; double typedAt; int asked, sugAsked, editing; CatalogDef defs[MAXQ]; ItemList res[MAXQ]; int nd, got; char sug[6][128]; int nsug; ItemList sugItems; unsigned gen; Scroll v; int fr, fi; } Q;
+static int q_has_ci(const char *hay, const char *word) {
+  size_t n = strlen(word); if (!n) return 1;
+  for (const char *p = hay; p && *p; p++) if (!strncasecmp(p, word, n)) return 1;
+  return 0;
+}
+/* Require every search term to occur in a title or its searchable metadata. */
+static int q_item_matches(const Item *it) {
+  char hay[2400], query[sizeof Q.q];
+  snprintf(hay, sizeof hay, "%s %s %s %s %s %s", it->name, it->description, it->metaLine, it->epName, it->id, it->videoId);
+  snprintf(query, sizeof query, "%s", Q.q);
+  for (char *s = query; *s;) {
+    while (*s && isspace((unsigned char)*s)) s++;
+    if (!*s) break;
+    char *e = s; while (*e && !isspace((unsigned char)*e)) e++;
+    char save = *e; *e = 0; int found = q_has_ci(hay, s); *e = save;
+    if (!found) return 0; s = e;
+  }
+  return 1;
+}
+static void q_filter_results(ItemList *l) {
+  if (!l || !Q.q[0]) return;
+  int n = 0;
+  for (int i = 0; i < l->n; i++) if (q_item_matches(&l->items[i])) {
+    if (n != i) l->items[n] = l->items[i]; n++;
+  }
+  l->n = n;
+}
 static void q_got(ItemList *l, int cached, void *ud) {
   (void)cached;
   unsigned t = (unsigned)(uintptr_t)ud;
@@ -425,7 +453,7 @@ static void q_got(ItemList *l, int cached, void *ud) {
   int k = t & 255;
   if (k < Q.nd) {
     itemlist_clear(&Q.res[k]);
-    if (l) { Q.res[k] = *l; free(l); }
+    if (l) { q_filter_results(l); Q.res[k] = *l; free(l); }
     Q.got++; /* a failed addon request is still complete: never leave the spinner running forever */
   } else if (l) itemlist_free(l);
 }
@@ -436,20 +464,8 @@ static void q_ask(void) { for (int i = 0; i < Q.nd; i++) itemlist_clear(&Q.res[i
     for (int i = 0; i < 2; i++) { memset(&Q.defs[i], 0, sizeof Q.defs[i]); snprintf(Q.defs[i].type, sizeof Q.defs[i].type, "%s", types[i]); snprintf(Q.defs[i].title, sizeof Q.defs[i].title, "%s", T(titles[i])); snprintf(Q.defs[i].url, sizeof Q.defs[i].url, CINEMETA "/catalog/%s/top.json", types[i]); sb_catalog(&Q.defs[i], q_got, (void *)(uintptr_t)(((Q.gen & 0xffffff) << 8) | i)); }
     return;
   }
-  /* Search every installed search-capable addon and Cinemeta in the same request batch. */
-  Q.nd = sb_search_defs(Q.q, Q.defs, MAXQ - 2);
-  {
-    char enc[448]; addon_urlenc(Q.q, enc, sizeof enc);
-    const char *types[2] = { "movie", "series" };
-    const char *titles[2] = { "Cinemeta movies", "Cinemeta series" };
-    for (int i = 0; i < 2; i++) {
-      memset(&Q.defs[Q.nd], 0, sizeof Q.defs[Q.nd]);
-      snprintf(Q.defs[Q.nd].type, sizeof Q.defs[Q.nd].type, "%s", types[i]);
-      snprintf(Q.defs[Q.nd].title, sizeof Q.defs[Q.nd].title, "%s", T(titles[i]));
-      snprintf(Q.defs[Q.nd].url, sizeof Q.defs[Q.nd].url, CINEMETA "/catalog/%s/top/search=%s.json", types[i], enc);
-      Q.nd++;
-    }
-  }
+  /* Cinemeta is already included by sb_search_defs; do not append duplicate top catalogs. */
+  Q.nd = sb_search_defs(Q.q, Q.defs, MAXQ);
   for (int i = 0; i < Q.nd; i++) sb_catalog(&Q.defs[i], q_got, (void *)(uintptr_t)(((Q.gen & 0xffffff) << 8) | i));
   if (!Q.sugAsked) { Q.sugAsked = 1; sb_suggest(Q.q, q_sug, (void *)(uintptr_t)Q.gen); }
 }
@@ -468,15 +484,17 @@ static void q_tick(float dt) { (void)dt; if (!Q.sugAsked && Q.q[0] && app_now() 
 static void so_key_back(void);
 static void close_act(int a, int b) { (void)a; (void)b; so_key_back(); }
 static void q_draw(void) {
-  float fieldY = phone_free_top() + 12, top = fieldY + 104; /* the field rides on the keyboard */
+  float fieldY = phone_free_top() + 12, top = fieldY + 104; /* the field stays outside the scrolling viewport */
   float searchBottom = SB_H - (KB_H > INS_B ? KB_H : INS_B); ph_drag(0, top, SB_W, searchBottom - top, &Q.v, 1); scroll_tick(&Q.v);
   float y = top + 10 - Q.v.pos;
+  gfx_clip_push(0, top, SB_W, searchBottom - top);
   for (int i = 0; i < Q.nd; i++) if (Q.res[i].n > 0) { char t[200]; snprintf(t, sizeof t, "%s", Q.defs[i].title); for (char *c = t; *c; c++) if (*c != ' ' && *c != '.' && (unsigned char)*c != 0xc2 && (unsigned char)*c != 0xb7 && *c != '-') { text_draw(t, PAD, y, F_H2 - 2, 800, TXT, -0.3f, SB_W - 2 * PAD, ALIGN_START); y += 52; break; } /* no heading when it has no words */ y += poster_grid(&Q.res[i], y, q_focus, i, Q.fr == i ? Q.fi : -1) + 20; }
   if (Q.q[0] && Q.asked && Q.got < Q.nd) spinner(SB_W / 2, y + 50, 20);
   if (!Q.q[0] && Q.nd == 0) { float iy = top + 30; icon_draw("ph_search", SB_W / 2 - 34, iy, 68, WHITE_A(40)); text_draw_wrapped(T("Popular films and series. Search titles and people from your addons."), SB_W / 2, iy + 90, SB_W - 4 * PAD, 3, F_BODY, 500, TXT2, 0, ALIGN_CENTER, 34); }
   else if (Q.asked && Q.got >= Q.nd && Q.nd) { int any = 0; for (int i = 0; i < Q.nd; i++) any += Q.res[i].n; if (!any) text_draw(T("None found"), PAD, y + 10, F_BODY, 500, TXT2, 0, 0, ALIGN_START); }
-  Q.v.max = y + Q.v.pos - (SB_H - (KB_H > INS_B ? KB_H : INS_B)) + 40;
-  { float th = fieldY + 96; gfx_rect(0, 0, SB_W, th, col_alpha(PAGE | 0xff000000u, 0.6f)); }
+  gfx_clip_pop();
+  Q.v.max = y + Q.v.pos - searchBottom + 40;
+  { float th = fieldY + 104; gfx_rect(0, 0, SB_W, th, PAGE | 0xff000000u); }
   if (Q.editing && KB_H > 0) hit_act(0, 0, SB_W, SB_H, close_act, 0, 0); /* typing: a tap anywhere else puts the keyboard away and goes back to the page */
   /* the bottom: the page fades under it, suggestions rise above the field, nearest the thumb first */
   gfx_rrect_v(0, 0, SB_W, fieldY + 96, 0, col_alpha(PAGE | 0xff000000u, 0.72f), col_alpha(PAGE | 0xff000000u, 0));
