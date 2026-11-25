@@ -49,11 +49,14 @@ float row_draw_k(const char *title, const ItemList *l, int wide, float y, Scroll
   if (!n) return full * e; /* (gone: only its room, closing) */
   if (e >= 0.999f) return row_draw(title, l, wide, y, s, rowIdx, focus, focusedIdx);
   gfx_clip_push(0, y, SB_W, full * e); gfx_opacity_push(e); row_draw(title, l, wide, y - (1 - e) * 30, s, rowIdx, focus, focusedIdx); gfx_opacity_pop(); gfx_clip_pop(); return full * e; }
+static void row_category_act(int row, int b) { (void)b; extern void ph_home_category_open(int); ph_home_category_open(row); }
 float row_draw(const char *title, const ItemList *l, int wide, float y, Scroll *s, int rowIdx, HitFn focus, int focusedIdx) {
   float cw = wide ? WIDE_CW * 1.30f : POSTER_W * 1.25f, ch = wide ? WIDE_CH * 1.30f : POSTER_H * 1.25f, gap = 14, top = 52;
   if (!l || l->n <= 0) return 0;
   if (y + top + ch < -10 || y > SB_H + 10) { scroll_tick(s); return top + ch + 36; }
-  text_draw(title, PAD, y + 6, F_H2 - 2, 800, TXT, -0.3f, SB_W - 2 * PAD, ALIGN_START);
+  if (rowIdx >= 0) { int rtlHead = app_rtl(); float aw = 44, ax = rtlHead ? SB_W - PAD - aw : PAD, tx = rtlHead ? PAD : PAD + aw + 8, tw = SB_W - 2 * PAD - aw - 8;
+    text_draw(title, tx, y + 6, F_H2 - 2, 800, TXT, -0.3f, tw, ALIGN_START); icon_draw_rot("ph_chev", ax + 10, y + 13, 24, WHITE_A(210), rtlHead ? 180 : 0); hit_act(ax, y, aw, 48, row_category_act, rowIdx, 0);
+  } else text_draw(title, PAD, y + 6, F_H2 - 2, 800, TXT, -0.3f, SB_W - 2 * PAD, ALIGN_START);
   s->max = l->n * (cw + gap) - gap + 2 * PAD - SB_W; scroll_tick(s); ph_drag(0, y + top, SB_W, ch + 8, s, 0);
   int rtl = app_rtl();
   float acc = 0; for (int i = 0; i < l->n; i++) { float lk = l->items[i].cw || l->items[i].airAt > 0 ? leave_k(&l->items[i], 2) : 0, x = PAD + acc - s->pos; acc += (cw + gap) * (1 - lk); if (rtl) x = SB_W - x - cw; if (x > SB_W || x + cw < 0) continue;
