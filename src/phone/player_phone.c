@@ -122,7 +122,7 @@ static void watch_progress_tick(void) {
   if (watchResumePending) {
     if (dur <= 0) return;
     double saved = store_num(pk, 0) / 1000.0, savedDur = store_num(dk, 0) / 1000.0;
-    if (saved > 2.0 && savedDur > 0 && saved < dur - 20.0) player_seek_to(saved);
+    if (saved > 2.0 && savedDur > 0 && saved < dur - 0.5) player_seek_to(saved);
     watchResumePending = 0; watchSavedAt = app_now();
   }
   int paused = player_paused();
