@@ -173,7 +173,7 @@ static void grp_sel(const Dl *d, int on) { for (int j = 0; j < ph_dl_count(); j+
 /* deleting: the file, the engine's task and its part files, the entry; then "Deleted" */
 static void del_vid(const char *id, const char *vid) { for (int j = ph_dl_count() - 1; j >= 0; j--) { const Dl *o = ph_dl_get(j); if (!strcmp(o->id, id) && !strcmp(o->vid, vid)) { ph_dl_remove(j); return; } } }
 static void del_grp(const char *id, const char *g) {
-  int cl = !strncmp(g, "coll:", 5), series = !strncmp(g, "series:", 7);
+  int cl = !strncmp(g, "coll:", 5), series = !strncmp(g, "series:", 7) || !strncmp(g, "series-title:", 13);
   for (int j = ph_dl_count() - 1; j >= 0; j--) {
     const Dl *o = ph_dl_get(j); int match = 0;
     if (series && !strcmp(o->type, "series")) { char k[260]; grp_key(o, k, sizeof k); match = !strcmp(k, g); }
