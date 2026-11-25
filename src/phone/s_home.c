@@ -205,6 +205,7 @@ static int key(int k) { Board *b = me();
 }
 static const Item *focused(void) { return focused_item(); }
 static int origin(float *x, float *y) { *x = SB_W / 2; *y = SB_H / 2; return 0; }
+void ph_home_category_open(int row) { Board *b = me(); if (!b || row < 0 || row >= b->n) return; const char *genre = strstr(b->rows[row].def.title, "Anime") || strstr(b->rows[row].def.title, "أنمي") ? "Animation" : ""; extern void board_open_category(const char *, const char *); board_open_category(b->rows[row].def.type, genre); }
 Screen phHome = { enter, leave, key, tick, draw, focused, NULL, NULL, origin };
 /* the TV's boards' hooks the core calls when the library changed */
 void board_invalidate(void) { B[0].lib = B[1].lib = ~0u; }
