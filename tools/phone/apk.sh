@@ -32,7 +32,7 @@ GRADLE="$TOOLS/gradle-8.11.1/bin/gradle"
 
 # Gradle 8.11 / AGP 8.7 require a supported JDK; CI pins Temurin 17.
 jdk_major() {
-  "$1/bin/java" -version 2>&1 | sed -n 's/.*version "\\([0-9]*\\).*/\\1/p' | head -1
+  "$1/bin/java" -version 2>&1 | sed -n 's/.*version "\([0-9]*\).*/\1/p' | head -1
 }
 JDK=""
 for c in \
@@ -51,7 +51,7 @@ export JAVA_HOME="$JDK"
 echo "JDK: $JAVA_HOME"
 
 # Local SDK/NDK locations for Gradle (generated per runner; never committed).
-printf 'sdk.dir=%s\\nndk.dir=%s\\n' "$ANDROID_HOME" "$NDK" > "$PHONE/local.properties"
+printf 'sdk.dir=%s\nndk.dir=%s\n' "$ANDROID_HOME" "$NDK" > "$PHONE/local.properties"
 
 # Native libraries: one set per ABI, extracted by Gradle (useLegacyPackaging).
 JNI="$PHONE/app/src/main/jniLibs"
@@ -84,7 +84,7 @@ if [ "$MODE" = release ] && [ ! -f "$PROPS" ]; then
   "$JDK/bin/keytool" -genkeypair -keystore "$STORE" -storepass "$PASS" -keypass "$PASS" \
     -alias phone -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Stremio Origin"
   ( umask 077
-    printf 'storeFile=%s\\nstorePassword=%s\\nkeyAlias=phone\\nkeyPassword=%s\\n' \
+    printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=phone\nkeyPassword=%s\n' \
       "$STORE" "$PASS" "$PASS" > "$PROPS" )
   chmod 600 "$PROPS"
   echo "created keystore: $STORE"
@@ -92,7 +92,7 @@ fi
 
 "$GRADLE" -p "$PHONE" "$TASK" -PtargetAbis="$ABI_LIST" --console=plain
 
-VERSION="$(sed -n "s/.*versionName '\\([^']*\\)'.*/\\1/p" "$PHONE/app/build.gradle" | head -1)"
+VERSION="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" "$PHONE/app/build.gradle" | head -1)"
 OUTDIR="$PHONE/app/build/outputs/apk/$MODE"
 # one APK per processor: 64-bit phones take arm64-v8a, older ones armeabi-v7a
 GITREV=$(git -C "$ROOT" rev-parse --short=10 HEAD 2>/dev/null || echo unknown)$(git -C "$ROOT" diff --quiet HEAD -- src 2>/dev/null || echo "+$(git -C "$ROOT" diff HEAD -- src | shasum | cut -c1-6)")
