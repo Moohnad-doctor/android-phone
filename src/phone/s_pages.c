@@ -455,7 +455,7 @@ Screen phSearch = { q_enter, q_leave, q_key, q_tick, q_draw, q_focused, NULL, q_
 
 /* ---- phone category filter overlay: a catalog's own results, filtered locally so every addon can use the same pills ---- */
 static struct { CatalogDef def; ItemList source, view; Scroll scroll; unsigned gen; int loading, genre, year, sort, focus; } Cat;
-static Screen catLayer;
+static Screen catLayerScreen;
 static const char *const CAT_GENRES[9] = { "", "Action", "Comedy", "Drama", "Sci-Fi", "Thriller", "Mystery", "Horror", "Adventure" };
 static const char *const CAT_YEARS[6] = { "All years", "2026", "2025", "2024", "2020–2023", "Classic" };
 static const char *const CAT_SORTS[4] = { "Most popular", "Now playing", "Newest airing", "Highest rated" };
@@ -480,7 +480,7 @@ static void cat_filter(void) {
   Cat.scroll.pos = Cat.scroll.vel = Cat.scroll.max = 0; Cat.focus = Cat.view.n ? 0 : -1;
 }
 static void cat_got(ItemList *l, int cached, void *ud) { (void)cached; unsigned gen = (unsigned)(uintptr_t)ud; if (!l) return; if (gen != Cat.gen) { itemlist_free(l); return; } itemlist_clear(&Cat.source); Cat.source = *l; free(l); Cat.loading = 0; cat_filter(); }
-static void cat_close(void) { if (app_overlay == &catLayer) app_overlay = NULL; Cat.gen++; Cat.loading = 0; itemlist_clear(&Cat.source); itemlist_clear(&Cat.view); }
+static void cat_close(void) { if (app_overlay == &catLayerScreen) app_overlay = NULL; Cat.gen++; Cat.loading = 0; itemlist_clear(&Cat.source); itemlist_clear(&Cat.view); }
 static void cat_close_act(int a, int b) { (void)a; (void)b; cat_close(); }
 static void cat_chip_act(int group, int value) { if (group == 0) Cat.genre = value; else if (group == 1) Cat.year = value; else Cat.sort = value; cat_filter(); pplat_haptic_k(HK_PICK, 0.45f); }
 static void cat_focus(int tag, int idx) { (void)tag; Cat.focus = idx; }
