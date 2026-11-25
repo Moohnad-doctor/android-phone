@@ -222,12 +222,9 @@ static void dli_draw(float a) { const Dl *d = ph_dl_get(dlInfo); if (!d) { ph_sh
   int nl = text_draw_wrapped(d->name, PAD, y, cw, 2, F_H2, 800, TXT, -0.3f, ALIGN_START, 44); y += nl * 44 + 4;
   { char st[200]; char sz[32] = ""; if (d->size > 0) bytes_s((double)d->size, sz, sizeof sz); snprintf(st, sizeof st, "%s%s%s%s%s", d->ep, d->ep[0] ? "  \xc2\xb7  " : "", st_word(d->state), sz[0] ? "  \xc2\xb7  " : "", sz); text_draw(st, PAD, y, F_SMALL, 600, TXT2, 0, cw, ALIGN_START); y += 50; }
   if (!d->info[0]) { y += info_box(PAD, y, cw, NULL, T("No details kept for this download."), F_SMALL, 500, TXT2, 3, 32) + 14; }
-  else { const char *p = d->info, *e1 = strchr(p, '
-'); char addon[200], rest[900]; snprintf(addon, sizeof addon, "%.*s", e1 ? (int)(e1 - p) : (int)strlen(p), p); p = e1 ? e1 + 1 : p + strlen(p);
-    const char *e2 = strchr(p, '
-'); char name[400]; snprintf(name, sizeof name, "%.*s", e2 ? (int)(e2 - p) : (int)strlen(p), p); p = e2 ? e2 + 1 : p + strlen(p); snprintf(rest, sizeof rest, "%s", p);
-    char *fl = strrchr(rest, '
-'); char file[300] = ""; if (fl && d->file[0] == 0) { snprintf(file, sizeof file, "%s", fl + 1); }
+  else { const char *p = d->info, *e1 = strchr(p, '\n'); char addon[200], rest[900]; snprintf(addon, sizeof addon, "%.*s", e1 ? (int)(e1 - p) : (int)strlen(p), p); p = e1 ? e1 + 1 : p + strlen(p);
+    const char *e2 = strchr(p, '\n'); char name[400]; snprintf(name, sizeof name, "%.*s", e2 ? (int)(e2 - p) : (int)strlen(p), p); p = e2 ? e2 + 1 : p + strlen(p); snprintf(rest, sizeof rest, "%s", p);
+    char *fl = strrchr(rest, '\n'); char file[300] = ""; if (fl && d->file[0] == 0) { snprintf(file, sizeof file, "%s", fl + 1); }
     if (name[0]) y += info_box(PAD, y, cw, addon[0] ? addon : NULL, name, F_BODY, 700, TXT, 6, 36) + 14;
     if (rest[0]) y += info_box(PAD, y, cw, T("DETAILS"), rest, F_SMALL, 500, WHITE_A(210), 30, 32) + 14; }
   if (d->file[0]) { const char *fn = strrchr(d->file, '/'); y += info_box(PAD, y, cw, T("FILE"), fn ? fn + 1 : d->file, F_SMALL, 500, TXT2, 6, 32) + 14; }
