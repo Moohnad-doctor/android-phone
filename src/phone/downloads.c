@@ -13,6 +13,7 @@
 #include <strings.h>
 #include "phone/phone.h"
 #include "core/store.h"
+#include "ui/img.h"
 #include "core/net.h"
 #include "core/json.h"
 #include "core/i18n.h"
@@ -331,6 +332,18 @@ int ph_dl_auto(void) { return store_bool("dlAuto", 1); } /* downloads choose the
 int ph_dl_done_any(const char *id) { load(); for (int i = 0; i < nd; i++) if (D[i].state == DL_DONE && !strcmp(D[i].id, id)) return 1; return 0; } /* (a poster's mark) */
 const Dl *ph_dl_find(const char *id, const char *vid) { load(); int i = find(id, vid); return i >= 0 ? &D[i] : NULL; }
 int ph_dl_state(const char *id, const char *vid, float *prog) { load(); int i = find(id, vid); if (i < 0) return -1; if (prog) *prog = D[i].size > 0 ? (float)((double)D[i].got / D[i].size) : 0; return D[i].state; }
+/* Playback positions are stored in milliseconds under the same canonical item + episode key
+   used by the download itself. The UI consumes seconds for readable remaining-time labels. */
+int ph_dl_watch_info(const Dl *d, double *position, double *duration) {
+  if (!d) return 0;
+  char pk[240], dk[240];
+  snprintf(pk, sizeof pk, "watch.%s.%s.position_ms", d->id, d->vid);
+  snprintf(dk, sizeof dk, "watch.%s.%s.duration_ms", d->id, d->vid);
+  double p = store_num(pk, 0), du = store_num(dk, 0);
+  if (position) *position = p / 1000.0;
+  if (duration) *duration = du / 1000.0;
+  return du > 0;
+}
 static void choices_cb(int i) { asking = 0; for (int j = 0; j < nd; j++) if (D[j].wifi == 2) D[j].wifi = i == 1 ? 1 : 0; save(); if (i == 1) toast(T("They start once you\xe2\x80\x99re on Wi-Fi"), 2200, NULL); }
 static void ask_data(void) { extern int player_open(void); if (store_bool("dlWifi", 0) || wifi_now()) return; if (player_open()) { for (int j = 0; j < nd; j++) if (D[j].wifi == 2) D[j].wifi = 0; toast(T("Downloading on mobile data"), 2200, NULL); return; } /* (in the player a question would be under the film) */ if (asking) return; asking = 1; askAt = app_now();
   const char *l[2] = { T("Download now on mobile data"), T("Wait for Wi-Fi") }; choices_open(T("You\xe2\x80\x99re not on Wi-Fi"), l, 2, 0, choices_cb); }
@@ -350,7 +363,7 @@ static int dl_add_(const Item *it, const char *vid, const char *ep, const Stream
   int i = find(it->id, vid); if (i >= 0 && D[i].state == DL_DONE) { if (!quiet) toast(T("Already downloaded"), 1600, NULL); return 0; }
   if (i < 0) { if (nd >= MAXD) { toast(T("Too many downloads: remove some first"), 2200, NULL); return 0; } i = nd++; }
   Dl *d = &D[i]; memset(d, 0, sizeof *d); snprintf(d->id, sizeof d->id, "%s", it->id); snprintf(d->type, sizeof d->type, "%s", it->type); snprintf(d->vid, sizeof d->vid, "%s", vid);
-  snprintf(d->name, sizeof d->name, "%s", it->name); snprintf(d->ep, sizeof d->ep, "%s", ep ? ep : ""); char pb[600]; snprintf(d->poster, sizeof d->poster, "%s", sb_poster_of(it, pb, sizeof pb)); snprintf(d->bg, sizeof d->bg, "%s", it->background);
+  snprintf(d->name, sizeof d->name, "%s", it->name); snprintf(d->ep, sizeof d->ep, "%s", ep ? ep : ""); char pb[600]; snprintf(d->poster, sizeof d->poster, "%s", sb_poster_of(it, pb, sizeof pb)); snprintf(d->bg, sizeof d->bg, "%s", it->background); if (d->bg[0]) img_prefetch(d->bg, 640, 360);
   snprintf(d->url, sizeof d->url, "%s", s->url); info_of(s, d->info, sizeof d->info); snprintf(d->group, sizeof d->group, "%s", group ? group : ""); d->size = s->size > 0 ? (long long)s->size : 0; d->state = DL_QUEUED; NEWWAIT(d); save(); notify_now(); notify_tick(); ask_data(); { void pplat_ask_notifications(void); pplat_ask_notifications(); }
   if (!quiet) ph_fly(d->poster, 3); /* the poster flies to the Downloads tab */
   return 1;
