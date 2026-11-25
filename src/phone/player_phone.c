@@ -467,10 +467,10 @@ static void td_tick(float pw) { float dt = phDt > 0.05f ? 0.05f : phDt;
     if (app_now() - TD.flyAt > 0.3) { TD.on = 0; TD.ox = TD.oy = TD.vx = TD.vy = 0; a_back(0, 0); tween_set(&panA, 0); } } (void)pw; }
 static void panel_draw(void) {
   float a = panA.v; if (a <= 0.01f) return; int kind = panel ? panel : shownKind;
-  td_tick(fminf(1200.0f, SB_W - 40.0f)); float pull = TD.on ? td_pull(fminf(1200.0f, SB_W - 40.0f)) : 0, fly = TD.on == 3 ? clampf((float)((app_now() - TD.flyAt) / 0.3), 0, 1) : 0;
+  td_tick(fminf(1200.0f, SB_W * 0.52f)); float pull = TD.on ? td_pull(fminf(1200.0f, SB_W * 0.52f)) : 0, fly = TD.on == 3 ? clampf((float)((app_now() - TD.flyAt) / 0.3), 0, 1) : 0;
   float tsc = 1 - 0.16f * pull - 0.22f * fly, trad = 46 * pull; /* smaller as it comes away, rounder */
   gfx_offset_push(TD.ox, TD.oy); gfx_scale_push(tsc, tsc, TD.gx, TD.gy); gfx_opacity_push(1 - 0.25f * pull - 0.75f * fly * fly);
-  float pw = fminf(1200.0f, SB_W - 40.0f), px = 20, py = 20, ph = SB_H - 40;
+  float pw = fminf(1200.0f, SB_W * 0.52f), px = 20, py = 20, ph = SB_H - 40;
   /* the glass grows out of the pill that opened it (and shrinks back into it); the contents come in once it has room */
   SbRect o = orgR.w > 0 ? orgR : rect(px + pw / 2 - 100, SB_H - 112, 200, 78); float e = clampf(a, 0, 1);
   float gx = o.x + (px - o.x) * e, gy = o.y + (py - o.y) * e, gw = o.w + (pw - o.w) * e, gh = o.h + (ph - o.h) * e, gr = 39 + (36 - 39) * e;
@@ -800,10 +800,10 @@ static int can_seek(void) { extern int player_failed(void); return player_live()
 static void seek_here(double t) { if (!can_seek()) return; hold_for_seek(); player_seek_to(t); seekAt = app_now(); heldT = t; heldUntil = app_now() + 5; }
 static void pinch_set(const char *m) { extern void player_set_aspect(const char *m); if (!*m) return; int changed = strcmp(m, player_aspect()) != 0; player_set_aspect(m); { void video_size_mode(const char *mode); video_size_mode(m); }
   if (changed) { toast(!strcmp(m, "fill") ? T("Fill the screen") : !strcmp(m, "zoom") ? T("Zoom") : T("Original"), 900, NULL); pplat_haptic(); } }
-float phone_subs_room(void) { float pw = fminf(1200.0f, SB_W - 40.0f), right = 20 + pw, k = clampf(panA.v, 0, 1), full = SB_W - 80, free = fmaxf(0.0f, SB_W - right - 40); return full + (free - full) * k; } /* the width the subtitles may take: the screen, or the room left of an open tray */
-void phone_subs_ass_fit(float *k, float *ox) { float pw = fminf(1200.0f, SB_W - 40.0f), right = 20 + pw, room = fmaxf(0.0f, SB_W - right - 40), t = clampf(panA.v, 0, 1), center = right + 20 + room / 2; *k = 1 + (room / SB_W - 1) * t; *ox = (center - SB_W / 2) * t; } /* the tray open: a styled frame shrunk whole into the room left of it (its signs keep their places in it, no line cut) */
-float phone_subs_dx(void) { float pw = fminf(1200.0f, SB_W - 40.0f), right = 20 + pw, room = fmaxf(0.0f, SB_W - right - 40), center = right + 20 + room / 2, k = clampf(panA.v, 0, 1); return (center - SB_W / 2) * k; } /* the tray open: the subtitles (and the style's sample) centred in the room left of it, so a style change is seen */
-static int in_panel(float x, float y) { if (panA.v < 0.5f) return 0; float pw = fminf(1200.0f, SB_W - 40.0f); return x >= 20 && x < 20 + pw && y >= 20 && y <= SB_H - 20; }
+float phone_subs_room(void) { float pw = fminf(1200.0f, SB_W * 0.52f), right = 20 + pw, k = clampf(panA.v, 0, 1), full = SB_W - 80, free = fmaxf(0.0f, SB_W - right - 40); return full + (free - full) * k; } /* the width the subtitles may take: the screen, or the room left of an open tray */
+void phone_subs_ass_fit(float *k, float *ox) { float pw = fminf(1200.0f, SB_W * 0.52f), right = 20 + pw, room = fmaxf(0.0f, SB_W - right - 40), t = clampf(panA.v, 0, 1), center = right + 20 + room / 2; *k = 1 + (room / SB_W - 1) * t; *ox = (center - SB_W / 2) * t; } /* the tray open: a styled frame shrunk whole into the room left of it (its signs keep their places in it, no line cut) */
+float phone_subs_dx(void) { float pw = fminf(1200.0f, SB_W * 0.52f), right = 20 + pw, room = fmaxf(0.0f, SB_W - right - 40), center = right + 20 + room / 2, k = clampf(panA.v, 0, 1); return (center - SB_W / 2) * k; } /* the tray open: the subtitles (and the style's sample) centred in the room left of it, so a style change is seen */
+static int in_panel(float x, float y) { if (panA.v < 0.5f) return 0; float pw = fminf(1200.0f, SB_W * 0.52f); return x >= 20 && x < 20 + pw && y >= 20 && y <= SB_H - 20; }
 static int on_bar(float x, float y) { return ui_on() && !panel && !live_now() && fabsf(y - barY()) < 54 && x >= barX0() - 40 && x <= barX1() + 40; }
 int phone_player_finger(const SDL_Event *e) {
   float x = e->tfinger.x * SB_W, y = e->tfinger.y * SB_H; double now = e->tfinger.timestamp / 1000.0;
@@ -857,7 +857,7 @@ int phone_player_finger(const SDL_Event *e) {
     if (G.mode == 10) { G.mode = 0; if (now - G.lt > 0.09) cV = 0; float proj = cF + cV * 0.22f; /* where the throw would carry it */
       if (proj > 0.34f && cF > 0.04f) { cMode = 3; pplat_haptic_k(HK_CLICK, 0.6f); } else cMode = 2; return 1; } /* far enough: on its way out; else home on a spring */ /* far enough (or flung): it fades out and closes; else it comes back */ /* all the way (or flung): closed; else it settles back */
     if (G.mode == 8) { G.mode = 0; return 1; }
-    if (G.mode == 11) { G.mode = 0; float pw = fminf(1200.0f, SB_W - 40.0f); if (now - G.lt > 0.08) { TD.vx = TD.vy = 0; } /* (held still before letting go: no throw) */
+    if (G.mode == 11) { G.mode = 0; float pw = fminf(1200.0f, SB_W * 0.52f); if (now - G.lt > 0.08) { TD.vx = TD.vy = 0; } /* (held still before letting go: no throw) */
       float px2 = TD.ox + TD.vx * 0.18f, py2 = TD.oy + TD.vy * 0.18f; /* where the throw would carry it */
       if (px2 > pw * 0.36f || py2 > SB_H * 0.28f) { int kind = panel ? panel : shownKind; TD.on = 2; a_back(0, 0); tween_to(&panA, 0, 0.42f, EASE_WEB); /* far enough: it goes home into its pill, shrinking and rounding as it goes (the controls coming back with it), the pill taking it with a little bounce */
         pillPulseK = kind == 3 ? 4 : kind; pillPulseAt = app_now() + 0.3; pplat_haptic_k(HK_CLICK, 0.6f); }
