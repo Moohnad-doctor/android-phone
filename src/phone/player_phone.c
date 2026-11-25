@@ -142,19 +142,29 @@ static void circle(float cx, float cy, float r, const char *icon, int lit, PFn f
   if (pk > 0) gfx_circle(cx, cy, r, WHITE_A((int)(40 * pk))); icon_draw(icon, cx - r * 0.55f, cy - r * 0.55f, r * 1.1f, lit ? ACC_FG : WHITE_A(240)); gfx_scale_pop();
   if (fn) phit(cx - r - 14, cy - r - 14, 2 * r + 28, 2 * r + 28, fn, a, 0);
 }
+/* Compact player-HUD control; brightness/volume swipe handling remains in the independent gesture path. */
+static void hud_circle(float cx, float cy, float r, const char *icon, int lit, PFn fn, int a) {
+  r *= 0.55f;
+  float pk = ppress(cx - r, cy - r, 2 * r, 2 * r), k = 1 - 0.1f * pk; gfx_scale_push(k, k, cx, cy);
+  pglass(cx - r, cy - r, 2 * r, 2 * r, r, lit ? col_alpha(ACC, 0.72f) : BLACK_A(72), lit ? col_alpha(ACC, 0.85f) : BLACK_A(128), 0, pk);
+  gfx_ring(cx - r, cy - r, 2 * r, 2 * r, r, 0.9f, WHITE_A(lit ? 0 : 36));
+  if (pk > 0) gfx_circle(cx, cy, r, WHITE_A((int)(32 * pk)));
+  icon_draw(icon, cx - r * 0.55f, cy - r * 0.55f, r * 1.1f, lit ? ACC_FG : WHITE_A(240)); gfx_scale_pop();
+  if (fn) phit(cx - r - 8, cy - r - 8, 2 * r + 16, 2 * r + 16, fn, a, 0);
+}
 /* a pill's icons: one, or two joined by a slash ("p_cc/p_spk": subtitles and sound in one) */
-static float icons_w(const char *icon) { return !icon ? 0 : strchr(icon, '/') ? 23 + 12 + 23 : 23; }
+static float icons_w(const char *icon) { return !icon ? 0 : strchr(icon, '/') ? 12.65f + 6.6f + 12.65f : 12.65f; }
 static void icons_draw(const char *icon, float x, float cy, uint32_t c) { const char *sl = strchr(icon, '/'); char a[32]; snprintf(a, sizeof a, "%.*s", (int)(sl ? sl - icon : (long)strlen(icon)), icon);
-  icon_draw(a, x, cy - 12, 23, c); if (sl) { text_draw("/", x + 23 + 6, cy - text_line_height(17) / 2.0f, 17, 600, col_alpha(c, 0.6f), 0, 0, ALIGN_CENTER); icon_draw(sl + 1, x + 23 + 12, cy - 12, 23, c); } }
+  icon_draw(a, x, cy - 6.6f, 12.65f, c); if (sl) { text_draw("/", x + 12.65f + 3.3f, cy - text_line_height(9.35f) / 2.0f, 9.35f, 600, col_alpha(c, 0.6f), 0, 0, ALIGN_CENTER); icon_draw(sl + 1, x + 12.65f + 6.6f, cy - 6.6f, 12.65f, c); } }
 static int pillPulseK = -1; static double pillPulseAt; /* a tray just gone back into its pill: it bounces */
 static float pillLK = 1; /* how much of its words a pill shows (the size pill unfolding its name): set for one call */
 static float pill(float x, float y, const char *icon, const char *label, int lit, PFn fn, int a) {
-  float lk = pillLK; pillLK = 1; float h = 43, tw = label ? text_width(label, 15, 700, 0) : 0, w0 = icons_w(icon) + 32, w = label ? tw + (icon ? icons_w(icon) + 8 : 0) + 32 : w0; if (label && lk < 1) w = w0 + (w - w0) * lk; /* no label: a short pill, the icon alone */ float pk = ppress(x, y, w, h), k = 1 - 0.05f * pk; { float q = (float)((app_now() - pillPulseAt) / 0.5); if (a == pillPulseK && q >= 0 && q < 1) k *= 1 + 0.16f * sinf(q * (float)M_PI * 1.5f) * expf(-q * 3); } gfx_scale_push(k, k, x + w / 2, y + h / 2); /* (a tray just gone back into it: a little bounce) */
-  pglass(x, y, w, h, h / 2, lit ? col_alpha(ACC, 0.68f) : BLACK_A(64), lit ? col_alpha(ACC, 0.8f) : BLACK_A(120), 0, pk); gfx_ring(x, y, w, h, h / 2, 1.5f, WHITE_A(lit ? 30 : 40));
+  float lk = pillLK; pillLK = 1; float h = 23.65f, tw = label ? text_width(label, 8.25f, 700, 0) : 0, w0 = icons_w(icon) + 17.6f, w = label ? tw + (icon ? icons_w(icon) + 4.4f : 0) + 17.6f : w0; if (label && lk < 1) w = w0 + (w - w0) * lk; /* no label: a short pill, the icon alone */ float pk = ppress(x, y, w, h), k = 1 - 0.05f * pk; { float q = (float)((app_now() - pillPulseAt) / 0.5); if (a == pillPulseK && q >= 0 && q < 1) k *= 1 + 0.16f * sinf(q * (float)M_PI * 1.5f) * expf(-q * 3); } gfx_scale_push(k, k, x + w / 2, y + h / 2); /* (a tray just gone back into it: a little bounce) */
+  pglass(x, y, w, h, h / 2, lit ? col_alpha(ACC, 0.68f) : BLACK_A(72), lit ? col_alpha(ACC, 0.8f) : BLACK_A(128), 0, pk); gfx_ring(x, y, w, h, h / 2, 0.9f, WHITE_A(lit ? 30 : 40));
   if (pk > 0) gfx_rrect(x, y, w, h, h / 2, WHITE_A((int)(30 * pk)));
-  float cx = label ? x + 16 + (1 - lk) * (w0 / 2 - icons_w(icon) / 2 - 28) : x + w / 2 - icons_w(icon) / 2; if (icon) { icons_draw(icon, cx, y + h / 2, lit ? ACC_FG : WHITE_A(235)); cx += icons_w(icon) + 8; }
-  if (label && lk > 0.01f) { gfx_clip_push(x, y, w - 20, h); gfx_opacity_push(lk); text_draw(label, cx, y + h / 2 - text_line_height(15) / 2.0f, 15, 700, lit ? ACC_FG : WHITE_A(240), 0, 0, ALIGN_LEFT); gfx_opacity_pop(); gfx_clip_pop(); }
-  gfx_scale_pop(); if (fn) phit(x, y - 10, w, h + 20, fn, a, 0); return w;
+  float cx = label ? x + 8.8f + (1 - lk) * (w0 / 2 - icons_w(icon) / 2 - 15.4f) : x + w / 2 - icons_w(icon) / 2; if (icon) { icons_draw(icon, cx, y + h / 2, lit ? ACC_FG : WHITE_A(235)); cx += icons_w(icon) + 4.4f; }
+  if (label && lk > 0.01f) { gfx_clip_push(x, y, w - 20, h); gfx_opacity_push(lk); text_draw(label, cx, y + h / 2 - text_line_height(8.25f) / 2.0f, 8.25f, 700, lit ? ACC_FG : WHITE_A(240), 0, 0, ALIGN_LEFT); gfx_opacity_pop(); gfx_clip_pop(); }
+  gfx_scale_pop(); if (fn) phit(x, y - 5.5f, w, h + 11, fn, a, 0); return w;
 }
 
 /* ---- the actions ---- */
@@ -561,12 +571,12 @@ static void title_draw(float x, float maxW) {
   const char *id = player_title_id(); if (strcmp(id, ageFor)) { snprintf(ageFor, sizeof ageFor, "%s", id); ageLbl[0] = 0; ageSess++; if (*id && !player_is_trailer()) rating_get(player_title_type(), id, on_age, (void *)(uintptr_t)ageSess); }
   float ta; { const LiveCard *c = live_card(); static Tween tA; static int init; if (!init) { init = 1; tween_set(&tA, 1); } tween_to(&tA, c->on && c->tuning && c->it && strcmp(c->it->id, id) ? 0 : 1, 0.22f, EASE_CSS_EASE); tween_tick(&tA, phDt); ta = tA.v; } /* switching channels: the one left fades away, the new one comes in when it plays */
   if (ta < 0.01f) return;
-  const char *lg = player_logo(); float lh = 53, lw = 560 < maxW ? 560 : maxW, asp = 0, ty = TOPY - 50; /* the logo, big enough to read at a glance */ GLuint t = lg && *lg ? img_get(lg, (int)lw, (int)lh, &asp) : 0;
+  const char *lg = player_logo(); float lh = 29.15f, lw = 308 < maxW ? 308 : maxW, asp = 0, ty = TOPY - 27.5f; /* the logo, big enough to read at a glance */ GLuint t = lg && *lg ? img_get(lg, (int)lw, (int)lh, &asp) : 0;
   if (t && asp > 0) { float w = lh * asp, h = lh; if (w > lw) { w = lw; h = w / asp; } gfx_image(t, x, ty + (lh - h) / 2, w, h, 0, WHITE_A((int)(255 * ta)), 0, 0, 1, 1); }
-  else text_draw(player_name(), x, ty + lh / 2 - text_line_height(20) / 2.0f, 20, 800, WHITE_A((int)(250 * ta)), -0.4f, maxW, ALIGN_START);
-  char f[300]; player_facts(f, sizeof f); float fy = ty + lh + 8, fx = x;
-  if (f[0]) { text_draw(f, fx + 1, fy + 2, 15, 700, BLACK_A((int)(120 * ta)), 0, maxW - 90, ALIGN_START); text_draw(f, fx, fy, 15, 700, WHITE_A((int)(235 * ta)), 0, maxW - 90, ALIGN_START); fx += text_width(f, 15, 700, 0) + 16; } /* (a faint shadow: readable on bright pictures) */
-  if (ageLbl[0] && fx < x + maxW - 60) { float w = text_width(ageLbl, 11, 800, 0) + 18, h = text_line_height(15) + 2; gfx_ring(fx, fy - 1, w, h, 7, 1.5f, WHITE_A((int)(170 * ta))); text_draw(ageLbl, fx + 9, fy + h / 2 - text_line_height(11) / 2.0f - 1, 11, 800, WHITE_A((int)(220 * ta)), 0, 0, ALIGN_LEFT); } /* the age: a small outlined badge */
+  else text_draw(player_name(), x, ty + lh / 2 - text_line_height(11) / 2.0f, 11, 800, WHITE_A((int)(250 * ta)), -0.4f, maxW, ALIGN_START);
+  char f[300]; player_facts(f, sizeof f); float fy = ty + lh + 4.4f, fx = x;
+  if (f[0]) { text_draw(f, fx + 0.55f, fy + 1.1f, 8.25f, 700, BLACK_A((int)(120 * ta)), 0, maxW - 50, ALIGN_START); text_draw(f, fx, fy, 8.25f, 700, WHITE_A((int)(235 * ta)), 0, maxW - 50, ALIGN_START); fx += text_width(f, 8.25f, 700, 0) + 8.8f; } /* (a faint shadow: readable on bright pictures) */
+  if (ageLbl[0] && fx < x + maxW - 33) { float w = text_width(ageLbl, 6.05f, 800, 0) + 9.9f, h = text_line_height(8.25f) + 1.1f; gfx_ring(fx, fy - 0.55f, w, h, 3.85f, 0.8f, WHITE_A((int)(170 * ta))); text_draw(ageLbl, fx + 4.95f, fy + h / 2 - text_line_height(6.05f) / 2.0f - 0.55f, 6.05f, 800, WHITE_A((int)(220 * ta)), 0, 0, ALIGN_LEFT); } /* the age: a small outlined badge */
 }
 
 static float barY(void) { return SB_H - 168; } /* (the pills under it at SB_H - 118) */
