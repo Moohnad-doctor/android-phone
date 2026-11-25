@@ -89,12 +89,12 @@ VERSION="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" "$PHONE/app/build.gradle"
 OUTDIR="$PHONE/app/build/outputs/apk/$MODE"
 # one APK per processor (libVLC is large): 64-bit phones take arm64-v8a, older ones armeabi-v7a
 GITREV=$(git -C "$ROOT" rev-parse --short=10 HEAD 2>/dev/null || echo unknown)$(git -C "$ROOT" diff --quiet HEAD -- src 2>/dev/null || echo "+$(git -C "$ROOT" diff HEAD -- src | shasum | cut -c1-6)")   # (uncommitted changes: their own fingerprint, so each test build keeps its own debug copy)
-for ABI in arm64-v8a armeabi-v7a; do D="$ROOT/dist/dbg/$GITREV/$ABI"; mkdir -p "$D"; for f in libmain.dbg.so libsbengine.dbg.so; do [ -f "$ROOT/build/phone-$ABI/$f" ] && cp "$ROOT/build/phone-$ABI/$f" "$D/"; done; done   # (a crash report's addresses, named with these: llvm-addr2line -fCe)
+for ABI in ${TARGET_ABIS:-arm64-v8a armeabi-v7a}; do D="$ROOT/dist/dbg/$GITREV/$ABI"; mkdir -p "$D"; for f in libmain.dbg.so libsbengine.dbg.so; do [ -f "$ROOT/build/phone-$ABI/$f" ] && cp "$ROOT/build/phone-$ABI/$f" "$D/"; done; done   # (a crash report's addresses, named with these: llvm-addr2line -fCe)
 [ "$MODE" = release ] && { R="$ROOT/dist/dbg/release-$VERSION-$GITREV"; mkdir -p "$R"; cp -R "$ROOT/dist/dbg/$GITREV/." "$R/"; }   # (a release's debug files kept apart, never pruned: a user's crash report names its code from them)
 ls -dt "$ROOT"/dist/dbg/*/ 2>/dev/null | grep -v '/release-' | tail -n +6 | while read -r d; do rm -rf "${d:?}"; done   # (the newest 5 test builds' debug files kept: each is ~185 MB, and they filled the disk twice)
 SUF="-$MODE"; [ "$MODE" = release ] && SUF=""   # (a release: the very name the app's updater looks for in the releases, stremio-origin-phone-<x.y.z>-<abi>.apk)
 mkdir -p "$ROOT/dist"; if [ -z "$SUF" ]; then rm -f "$ROOT/dist/stremio-origin-phone-"*"-arm64-v8a.apk" "$ROOT/dist/stremio-origin-phone-"*"-armeabi-v7a.apk"; else rm -f "$ROOT/dist/stremio-origin-phone-"*"$SUF.apk"; fi; n=0
-for ABI in arm64-v8a armeabi-v7a; do
+for ABI in ${TARGET_ABIS:-arm64-v8a armeabi-v7a}; do
   for f in "$OUTDIR/app-$ABI-$MODE.apk" "$OUTDIR/app-$ABI-$MODE-unsigned.apk"; do
     [ -f "$f" ] || continue; DEST="$ROOT/dist/stremio-origin-phone-$VERSION-$ABI$SUF.apk"; cp "$f" "$DEST"; n=$((n + 1))
     echo "APK: $DEST ($(ls -lh "$DEST" | awk '{print $5}'))"; break
