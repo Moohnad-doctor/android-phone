@@ -131,12 +131,16 @@ jobs:
         run: |
           set -euo pipefail
           tools/phone/apk.sh debug
-          test -s "dist/stremio-origin-phone-1.1.0-arm64-v8a-debug.apk"
+          VERSION="$(sed -n "s/.*versionName '\\([^']*\\)'.*/\\1/p" android-phone/app/build.gradle | head -1)"
+          test -n "$VERSION"
+          APK_PATH="dist/stremio-origin-phone-$VERSION-arm64-v8a-debug.apk"
+          test -s "$APK_PATH"
+          echo "APK_PATH=$APK_PATH" >> "$GITHUB_ENV"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: stremio-origin-android-arm64-debug-apk
-          path: dist/stremio-origin-phone-1.1.0-arm64-v8a-debug.apk
+          path: ${{ env.APK_PATH }}
           if-no-files-found: error
           retention-days: 14
