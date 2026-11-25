@@ -161,7 +161,7 @@ static long ram_free_now(const char *root) { long m = plat_mem_free_mb(); long t
 
 /* the window a film wants: about 40 s in front at its bitrate, the same again for the trims' slack, plus head, tail
    and a short look-behind (see the engine's window split) */
-static long want_window(double bps) { if (bps <= 0) bps = 1 * MB; long w = (long)(2.2 * bps * 40 / MB) + 32; return w; }
+static long want_window(double bps) { if (bps <= 0) bps = 1 * MB; long w = (long)(2.6 * bps * 55 / MB) + 48; return w; }
 static long want_for(const Prof *P, double bps, uint64_t size) { /* a USB drive: the whole film (seeks back and forth stay on it) */
   if (P->loc == LOC_USB) return size ? (long)(size / MB) + 64 : P->wmax; return want_window(bps); }
 static long clamp_in(const Prof *P, long want, long room) {
