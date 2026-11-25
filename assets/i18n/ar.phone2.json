@@ -53,5 +53,19 @@
   "Highest rated": "الأعلى تقييمًا",
   "All genres": "كل التصنيفات",
   "{n} episodes": "{n} حلقات",
-  "Two episodes": "حلقتان"
+  "Two episodes": "حلقتان",
+  "Trending now": "الرائج الآن",
+  "Movies": "أفلام",
+  "Series": "مسلسلات",
+  "Anime": "أنمي",
+  "Action": "أكشن",
+  "Comedy": "كوميدي",
+  "Drama": "دراما",
+  "Science Fiction": "خيال علمي",
+  "Thriller": "إثارة",
+  "Mystery": "غموض",
+  "Horror": "رعب",
+  "Adventure": "مغامرة",
+  "None found": "لم يتم العثور على نتائج",
+  "Popular films and series. Search titles and people from your addons.": "أفلام ومسلسلات رائجة. ابحث عن العناوين والأشخاص في إضافاتك."
 }
