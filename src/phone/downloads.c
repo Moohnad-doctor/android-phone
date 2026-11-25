@@ -486,7 +486,7 @@ void ph_download_group(const Item *it, const char *const *vids, const char *cons
   load(); if (n <= 0) return; int added = 0; char pb[600]; sb_poster_of(it, pb, sizeof pb);
   for (int k = 0; k < n; k++) { int i = find(it->id, vids[k]); if (i >= 0 && D[i].state != DL_NOSTREAM && D[i].state != DL_FAILED) continue; if (i < 0) { if (nd >= MAXD) break; i = nd++; }
     Dl *d = &D[i]; memset(d, 0, sizeof *d); snprintf(d->id, sizeof d->id, "%s", it->id); snprintf(d->type, sizeof d->type, "%s", it->type); snprintf(d->vid, sizeof d->vid, "%s", vids[k]);
-    snprintf(d->name, sizeof d->name, "%s", it->name); snprintf(d->ep, sizeof d->ep, "%s", eps && eps[k] ? eps[k] : ""); snprintf(d->poster, sizeof d->poster, "%s", pb); snprintf(d->bg, sizeof d->bg, "%s", it->background);
+    snprintf(d->name, sizeof d->name, "%s", it->name); snprintf(d->ep, sizeof d->ep, "%s", eps && eps[k] ? eps[k] : ""); snprintf(d->poster, sizeof d->poster, "%s", pb); snprintf(d->bg, sizeof d->bg, "%s", it->background); if (d->bg[0]) img_prefetch(d->bg, 640, 360);
     snprintf(d->group, sizeof d->group, "%s", group ? group : ""); d->state = DL_CHOOSING; NEWWAIT(d); q_push(i); added++; }
   if (!added) { toast(T("Already downloaded"), 1600, NULL); return; }
   save(); ph_fly(pb, 3); notify_now(); notify_tick(); qIt = *it; q_next(); ask_data(); { void pplat_ask_notifications(void); pplat_ask_notifications(); } }
@@ -496,7 +496,7 @@ void ph_download_items(const Item *its, int n, const char *group) {
   for (int k = 0; k < n; k++) { const Item *it = &its[k]; int i = find(it->id, it->id); if (i >= 0 && D[i].state != DL_NOSTREAM && D[i].state != DL_FAILED) { if (group && *group && strcmp(D[i].group, group)) { snprintf(D[i].group, sizeof D[i].group, "%s", group); added++; } continue; } /* (one already here: it joins the group) */
     if (i < 0) { if (nd >= MAXD) break; i = nd++; }
     Dl *d = &D[i]; memset(d, 0, sizeof *d); snprintf(d->id, sizeof d->id, "%s", it->id); snprintf(d->type, sizeof d->type, "%s", it->type); snprintf(d->vid, sizeof d->vid, "%s", it->id);
-    snprintf(d->name, sizeof d->name, "%s", it->name); char b[600]; snprintf(d->poster, sizeof d->poster, "%s", sb_poster_of(it, b, sizeof b)); if (!pb[0]) snprintf(pb, sizeof pb, "%s", d->poster); snprintf(d->bg, sizeof d->bg, "%s", it->background);
+    snprintf(d->name, sizeof d->name, "%s", it->name); char b[600]; snprintf(d->poster, sizeof d->poster, "%s", sb_poster_of(it, b, sizeof b)); if (!pb[0]) snprintf(pb, sizeof pb, "%s", d->poster); snprintf(d->bg, sizeof d->bg, "%s", it->background); if (d->bg[0]) img_prefetch(d->bg, 640, 360);
     snprintf(d->group, sizeof d->group, "%s", group ? group : ""); d->state = DL_CHOOSING; NEWWAIT(d); q_push(i); added++; }
   if (!added) { toast(T("Already downloaded"), 1600, NULL); return; }
   save(); if (pb[0]) ph_fly(pb, 3); notify_now(); notify_tick(); q_next(); ask_data(); { void pplat_ask_notifications(void); pplat_ask_notifications(); } }
