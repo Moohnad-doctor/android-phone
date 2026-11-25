@@ -622,7 +622,7 @@ static void on_page(ItemList *l, int more, void *ud) {
   if ((b->gen & 0xffffff) != gen || row >= b->n) { itemlist_free(l); return; }
   Row *r = &b->rows[row]; if (!r->paging) { itemlist_free(l); return; } r->paging = 0; /* the row was filled again meanwhile */
   if (!l) { r->pageAt = app_now() + 10; return; }
-  int got = l->n; if (b->kind == 1) year_keep(l);
+  int got = l->n; if (b->kind == 1) { year_keep(l); sort_items(l); }
   int add = 0; Item *grow = realloc(r->items.items, (size_t)(r->items.n + l->n + 1) * sizeof(Item));
   if (grow) { r->items.items = grow;
     for (int i = 0; i < l->n; i++) { int dup = 0; for (int k = 0; k < r->items.n && !dup; k++) dup = !strcmp(r->items.items[k].id, l->items[i].id); if (!dup && l->items[i].id[0]) r->items.items[r->items.n++] = l->items[i], add++; } }
@@ -800,7 +800,7 @@ static void hl_rect(int c, float *x, float *w) {
 }
 static float hl_over(float hx, float hw, float x, float w) { float l = hx > x ? hx : x, r = hx + hw < x + w ? hx + hw : x + w; return w > 0 && r > l ? (r - l) / w : 0; } /* how much of a box the highlight covers */
 static void filt_draw(Board *b, Row *r, int ri, float y, float rowA, int active) {
-  int rtl = app_rtl(), n = filt_chips(); if (r->col >= n) r->col = n - 1; float h = 56, cy = y + 24; char buf[3][96]; const char *t[3]; float tw[3], w[3], tot = 0;
+  int rtl = app_rtl(), n = filt_chips(); if (r->col >= n) r->col = n - 1; float h = 56, cy = y + 24; char buf[5][96]; const char *t[5]; float tw[5], w[5], tot = 0;
   gfx_opacity_push(rowA); FL.y = cy; FL.nchip = n;
   for (int i = 0; i < n; i++) { t[i] = chip_txt(i, buf[i], sizeof buf[i]); tw[i] = text_width(t[i], 24, 700, 0); float ww = 26 + tw[i] + 10 + 18 + 26;
     if (FL.wt[i].v < 1) tween_set(&FL.wt[i], ww); else if (fabsf(FL.wt[i].to - ww) > 0.5f) tween_to(&FL.wt[i], ww, 0.24f, EASE_ROW); tween_tick(&FL.wt[i], app_dt()); w[i] = FL.wt[i].v; /* (its words changed: it widens or narrows smoothly) */
