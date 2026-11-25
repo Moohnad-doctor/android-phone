@@ -19,7 +19,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
 
     steps:
       - name: Check out source
@@ -37,7 +37,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y \
-            autoconf automake bzip2 build-essential cmake curl libtool ninja-build \
+            autoconf automake bzip2 build-essential cmake curl git libtool ninja-build \
             pkg-config python3 unzip xz-utils zip
 
       - name: Install Android SDK and NDK packages
@@ -116,7 +116,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bash -n tools/phone/*.sh
+          find tools -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
 
       - name: Build native dependencies (arm64-v8a only)
         shell: bash
@@ -130,6 +130,17 @@ jobs:
           set -euo pipefail
           tools/phone/build.sh arm64-v8a
 
+      - name: Build torrent engine (arm64-v8a)
+        shell: bash
+        env:
+          ORIGIN_BUILD: ${{ runner.temp }}/myth-engine-build
+          ENGINE_JOBS: '4'
+        run: |
+          set -euo pipefail
+          tools/build-engine.sh android-arm64
+          test -s build/phone-arm64-v8a/libsbengine.so
+          "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" -h build/phone-arm64-v8a/libsbengine.so | grep -q "Machine:.*AArch64"
+
       - name: Assemble arm64-v8a debug APK
         shell: bash
         env:
@@ -139,7 +150,7 @@ jobs:
           tools/phone/apk.sh debug
           VERSION="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" android-phone/app/build.gradle | head -1)"
           test -n "$VERSION"
-          APK_PATH="dist/stremio-origin-phone-$VERSION-arm64-v8a-debug.apk"
+          APK_PATH="dist/myth-$VERSION-arm64-v8a-debug.apk"
           test -s "$APK_PATH"
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK_PATH"
           python3 - "$APK_PATH" <<'PY'
@@ -152,16 +163,25 @@ jobs:
                   for path in apk.namelist()
                   if path.startswith("lib/") and len(path.split("/")) > 2
               }
+          required = {
+              "lib/arm64-v8a/libmain.so",
+              "lib/arm64-v8a/libsbengine.so",
+              "lib/arm64-v8a/libSDL2.so",
+              "lib/arm64-v8a/libcurl.so",
+          }
+          missing = required.difference(apk.namelist())
+          if missing:
+              raise SystemExit(f"APK is missing required native libraries: {sorted(missing)}")
           if abis != {"arm64-v8a"}:
               raise SystemExit(f"Expected only arm64-v8a native libraries, found: {sorted(abis)}")
-          print("Verified native ABI set:", ", ".join(sorted(abis)))
+          print("Verified arm64-v8a ABI and required native libraries:", ", ".join(sorted(required)))
           PY
           echo "APK_PATH=$APK_PATH" >> "$GITHUB_ENV"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: stremio-origin-android-arm64-debug-apk
+          name: myth-android-arm64-debug-apk
           path: ${{ env.APK_PATH }}
           if-no-files-found: error
           retention-days: 14
