@@ -55,7 +55,7 @@ sed -E -e '/engine\/webview"/d' -e '/WebViewProvider/d' \
 export GOTOOLCHAIN=local CGO_ENABLED=1
 LDX="-s -w -X main.gopeedCommit=$(echo $GOPEED_COMMIT | cut -c1-12)"
 
-host_tag() { case "$(uname -s)" in Darwin) echo darwin-x86_64 ;; *) echo linux-x86_64 ;; esac; }
+host_tag() { echo "${ANDROID_NDK_HOST_TAG:-linux-x86_64}"; }
 
 build() {
   case "$1" in
