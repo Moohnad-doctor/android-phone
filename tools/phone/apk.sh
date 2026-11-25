@@ -31,6 +31,8 @@ jdk_major() {
 }
 JDK=""
 for c in \
+  "${JAVA_HOME:-}" \
+  "$(command -v java >/dev/null 2>&1 && dirname "$(dirname "$(readlink -f "$(command -v java)")")" || true)" \
   "$(brew --prefix openjdk 2>/dev/null || true)/libexec/openjdk.jdk/Contents/Home" \
   "$(brew --prefix openjdk@17 2>/dev/null || true)/libexec/openjdk.jdk/Contents/Home" \
   "$(/usr/libexec/java_home -v 23 2>/dev/null || true)" \
@@ -39,7 +41,7 @@ for c in \
   major="$(jdk_major "$c")"
   if [ "$major" -ge 17 ] && [ "$major" -le 23 ]; then JDK="$c"; break; fi
 done
-[ -n "$JDK" ] || { echo "error: no JDK 17-23 found (brew install openjdk@17)" >&2; exit 1; }
+[ -n "$JDK" ] || { echo "error: no JDK 17-23 found (install or set JAVA_HOME)" >&2; exit 1; }
 export JAVA_HOME="$JDK"
 echo "JDK: $JAVA_HOME"
 
@@ -48,7 +50,7 @@ printf 'sdk.dir=%s\n' "$ANDROID_HOME" > "$PHONE/local.properties"
 
 # Native libraries: one set per ABI, extracted by Gradle (useLegacyPackaging).
 JNI="$PHONE/app/src/main/jniLibs"
-for ABI in arm64-v8a armeabi-v7a; do
+for ABI in ${TARGET_ABIS:-arm64-v8a armeabi-v7a}; do
   mkdir -p "$JNI/$ABI"
   rm -f "$JNI/$ABI"/*.so
   B="$ROOT/build/phone-$ABI"
@@ -81,7 +83,7 @@ if [ "$MODE" = release ] && [ ! -f "$PROPS" ]; then
   echo "created keystore: $STORE"
 fi
 
-"$GRADLE" -p "$PHONE" "$TASK" --console=plain
+"$GRADLE" -p "$PHONE" "$TASK" -PtargetAbis="${TARGET_ABIS:-arm64-v8a,armeabi-v7a}" --console=plain
 
 VERSION="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" "$PHONE/app/build.gradle" | head -1)"
 OUTDIR="$PHONE/app/build/outputs/apk/$MODE"
