@@ -34,10 +34,10 @@ void ph_leave_tick(void) { extern void ph_leave_done(const Item *it, int act); f
 static Item phone_localized_item(const Item *src) {
   Item out = *src;
   if (app_rtl() && (!strcmp(src->type, "movie") || !strcmp(src->type, "series")) && src->id[0]) {
-    tmdb_wanted(src->type, src->id, 1, 0);
-    const TmdbLoc *loc = tmdb_loc(src->type, src->id);
+    tmdb_wanted(src->id);
+    const TmdbLoc *loc = tmdb_loc(src->type, src->id, 1);
     if (loc) {
-      if (loc->title && *loc->title) snprintf(out.name, sizeof out.name, "%s", loc->title);
+      if (loc->name && *loc->name) snprintf(out.name, sizeof out.name, "%s", loc->name);
       if (loc->poster && *loc->poster) snprintf(out.poster, sizeof out.poster, "%s", loc->poster);
     }
   }
