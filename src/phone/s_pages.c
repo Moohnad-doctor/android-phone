@@ -384,7 +384,7 @@ static void q_got(ItemList *l, int cached, void *ud) {
 }
 static void q_sug(ItemList *l, char names[6][128], int nn, void *ud) { if ((unsigned)(uintptr_t)ud != Q.gen) { if (l) itemlist_free(l); return; } Q.nsug = nn > 6 ? 6 : nn; for (int i = 0; i < Q.nsug; i++) snprintf(Q.sug[i], 128, "%s", names[i]); itemlist_clear(&Q.sugItems); if (l) { Q.sugItems = *l; free(l); } }
 static void q_ask(void) { for (int i = 0; i < Q.nd; i++) itemlist_clear(&Q.res[i]); Q.nd = Q.got = 0; Q.gen++; Q.v.pos = Q.v.vel = 0; Q.fr = -1; Q.fi = 0; if (!Q.q[0]) Q.nsug = 0; itemlist_clear(&Q.sugItems); /* (the suggestions already shown stay) */ if (!Q.q[0]) {
-    Q.nd = 2; Q.got = 0;
+    Q.nd = 2; Q.got = 0; Q.asked = 1; Q.sugAsked = 1;
     const char *types[2] = { "movie", "series" }, *titles[2] = { "Popular movies", "Popular series" };
     for (int i = 0; i < 2; i++) { memset(&Q.defs[i], 0, sizeof Q.defs[i]); snprintf(Q.defs[i].type, sizeof Q.defs[i].type, "%s", types[i]); snprintf(Q.defs[i].title, sizeof Q.defs[i].title, "%s", T(titles[i])); snprintf(Q.defs[i].url, sizeof Q.defs[i].url, CINEMETA "/catalog/%s/top.json", types[i]); sb_catalog(&Q.defs[i], q_got, (void *)(uintptr_t)(((Q.gen & 0xffffff) << 8) | i)); }
     return;
@@ -411,7 +411,7 @@ static void field_act(int a, int b) { (void)a; (void)b; Q.editing = 1; phone_key
 static void clear_act(int a, int b) { (void)a; (void)b; Q.q[0] = 0; q_ask(); Q.editing = 1; phone_keyboard(1); }
 static void sug_act(int i, int b) { (void)b; if (i < Q.nsug) { snprintf(Q.q, sizeof Q.q, "%s", Q.sug[i]); Q.asked = 1; q_ask(); Q.editing = 0; phone_keyboard(0); } }
 static void q_focus(int r, int i) { Q.fr = r; Q.fi = i; if (r >= 0 && r < Q.nd && i < Q.res[r].n) accent_tint_fetch(Q.res[r].items[i].id, Q.res[r].items[i].poster, Q.res[r].items[i].logo); }
-static void q_enter(const void *p) { (void)p; bg_clear(); Q.fr = -1; if (!Q.q[0]) { Q.editing = 1; phone_keyboard(1); } }
+static void q_enter(const void *p) { (void)p; bg_clear(); Q.fr = -1; if (!Q.q[0]) { Q.editing = 1; phone_keyboard(1); q_ask(); } }
 static void q_leave(void) { phone_keyboard(0); Q.editing = 0; }
 static void q_tick(float dt) { (void)dt; if (!Q.sugAsked && Q.q[0] && app_now() - Q.typedAt > 0.12) { Q.sugAsked = 1; sugGen++; sb_suggest(Q.q, q_sug_only, (void *)(uintptr_t)sugGen); } /* the words first */
   if (!Q.asked && Q.q[0] && app_now() - Q.typedAt > 0.45) { Q.asked = 1; q_ask(); } }
