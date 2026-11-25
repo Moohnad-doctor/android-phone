@@ -211,7 +211,7 @@ static void dl_card(const Item *it, const char *vid, int ds, float pr) {
   gfx_clip_pop(); gfx_opacity_pop(); }
 static void a_lock(int a, int b) { (void)a; (void)b; locked = 1; lockShownAt = app_now(); ui_show(0); }
 static double playTapAt; /* the play button pressed by hand (a seek's wait ends with it) */
-static void a_play(int a, int b) { (void)a; (void)b; playTapAt = app_now(); player_toggle_play(); keep(); }
+static void a_play(int a, int b) { (void)a; (void)b; playTapAt = app_now(); player_toggle_play(); watch_progress_save_now(); keep(); }
 static int can_seek(void);
 static void a_jump(int dir, int b) { (void)b; if (!can_seek()) return; hold_for_seek(); player_seek_dir(dir); seekAt = app_now(); keep(); btnJumps = btnDir == dir && app_now() - btnAt < 1.2 ? btnJumps + 1 : 1; btnDir = dir; btnAt = app_now(); tween_set(&btnA, 0); tween_to(&btnA, 1, 0.45f, EASE_OUT); pplat_haptic(); }
 static double aspAt = -9; static Tween aspK; /* the size just changed: its name shown a moment in its pill */
