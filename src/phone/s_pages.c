@@ -391,13 +391,16 @@ static void q_ask(void) { for (int i = 0; i < Q.nd; i++) itemlist_clear(&Q.res[i
     for (int i = 0; i < 2; i++) { memset(&Q.defs[i], 0, sizeof Q.defs[i]); snprintf(Q.defs[i].type, sizeof Q.defs[i].type, "%s", types[i]); snprintf(Q.defs[i].title, sizeof Q.defs[i].title, "%s", T(titles[i])); snprintf(Q.defs[i].url, sizeof Q.defs[i].url, CINEMETA "/catalog/%s/top.json", types[i]); sb_catalog(&Q.defs[i], q_got, (void *)(uintptr_t)(((Q.gen & 0xffffff) << 8) | i)); }
     return;
   }
-  Q.nd = sb_search_defs(Q.q, Q.defs, MAXQ);
-  if (!Q.nd) {
+  /* Search every installed search-capable addon and Cinemeta in the same request batch. */
+  Q.nd = sb_search_defs(Q.q, Q.defs, MAXQ - 2);
+  {
     char enc[448]; addon_urlenc(Q.q, enc, sizeof enc);
     const char *types[2] = { "movie", "series" };
+    const char *titles[2] = { "Cinemeta movies", "Cinemeta series" };
     for (int i = 0; i < 2; i++) {
       memset(&Q.defs[Q.nd], 0, sizeof Q.defs[Q.nd]);
       snprintf(Q.defs[Q.nd].type, sizeof Q.defs[Q.nd].type, "%s", types[i]);
+      snprintf(Q.defs[Q.nd].title, sizeof Q.defs[Q.nd].title, "%s", T(titles[i]));
       snprintf(Q.defs[Q.nd].url, sizeof Q.defs[Q.nd].url, CINEMETA "/catalog/%s/top/search=%s.json", types[i], enc);
       Q.nd++;
     }
