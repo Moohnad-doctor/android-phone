@@ -106,6 +106,13 @@ static void tick(float dt) {
     if (L.restarting && timer_tick(&L.restart, dt) >= 1 && !L.restart.on) { /* the app restarts behind the start screen */
       L.restart.on = 0; L.restarting = 2; app_splash_done = 0; splash_start(1, L.doneAt); topNav.idx = NAV_HOME; app_go(SCR_HOME, NULL, 1); memset(&L, 0, sizeof L); } }
 }
+void login_qr_start(void) { start_qr(); }
+void login_qr_tick(float dt) { tick(dt); }
+void login_qr_stop(void) { if (L.pollReq) net_cancel(L.pollReq); L.pollReq = 0; }
+int login_qr_ready(void) { return L.qrOk && !L.done; }
+const char *login_qr_code(void) { return L.code; }
+const char *login_qr_link(void) { return L.link; }
+const char *login_qr_status(void) { return L.stat; }
 /* the glow: two big soft discs wandering slowly (as rings of falling alpha: no radial shader needed) */
 static void blob(float cx, float cy, uint32_t c, float peak) {
   float R = 550; gfx_alpha_tex(gfx_radial_tex(), cx - R, cy - R, 2 * R, 2 * R, col_alpha(c, peak * 0.55f)); /* a soft disc from a small texture: one cheap quad */
