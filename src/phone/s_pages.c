@@ -138,18 +138,49 @@ static void dr_read(DlRow *r, long long got, long long size, long long spd, int 
 /* the seasons shown open; what is picked in Select */
 static char dlOpen[64][260]; static int nOpen;
 static int is_open(const char *k) { for (int i = 0; i < nOpen; i++) if (!strcmp(dlOpen[i], k)) return 1; return 0; }
-static void grp_key(const Dl *d, char *k, size_t c) { if (ph_dl_group_is_coll(d)) snprintf(k, c, "%s", d->group); else if (!strcmp(d->type, "series")) snprintf(k, c, "series:%s", d->id); else snprintf(k, c, "%s|%s", d->id, d->group); } /* (a collection's films: one group across their titles) */
+static void series_norm(const char *s, char *out, size_t cap) {
+  size_t n = 0; if (!cap) return;
+  for (const unsigned char *p = (const unsigned char *)s; *p && n + 1 < cap; p++) {
+    unsigned char c = *p;
+    if (c >= 128 || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z')) out[n++] = (char)c;
+    else if (c >= 'A' && c <= 'Z') out[n++] = (char)(c + ('a' - 'A'));
+  }
+  out[n] = 0;
+}
+static void grp_key(const Dl *d, char *k, size_t c) {
+  if (ph_dl_group_is_coll(d)) snprintf(k, c, "%s", d->group);
+  else if (!strcmp(d->type, "series")) {
+    if (d->id[0]) snprintf(k, c, "series:%s", d->id);
+    else { char nm[256]; series_norm(d->name, nm, sizeof nm); snprintf(k, c, "series-title:%s", nm); }
+  } else snprintf(k, c, "%s|%s", d->id, d->group);
+} /* one canonical series key, independent of download order */
 static int selMode; static Tween selT; static char selK[128][110]; static int nSel;
 static void sel_key(const Dl *d, char *k, size_t c) { snprintf(k, c, "%s|%s", d->id, d->vid); }
 static int is_sel(const Dl *d) { char k[110]; sel_key(d, k, sizeof k); for (int i = 0; i < nSel; i++) if (!strcmp(selK[i], k)) return 1; return 0; }
 static void sel_set(const Dl *d, int on) { char k[110]; sel_key(d, k, sizeof k); for (int i = 0; i < nSel; i++) if (!strcmp(selK[i], k)) { if (!on) { memmove(selK[i], selK[i + 1], (size_t)(nSel - i - 1) * sizeof selK[0]); nSel--; } return; } if (on && nSel < 128) snprintf(selK[nSel++], 110, "%s", k); }
-static int same_grp(const Dl *a, const Dl *b) { if (ph_dl_group_is_coll(a) || ph_dl_group_is_coll(b)) return ph_dl_group_is_coll(a) && ph_dl_group_is_coll(b) && !strcmp(a->group, b->group); if (!strcmp(a->type, "series") && !strcmp(b->type, "series")) return !strcmp(a->id, b->id); return !strcmp(a->group, b->group) && !strcmp(a->id, b->id); }
+static int same_grp(const Dl *a, const Dl *b) {
+  if (ph_dl_group_is_coll(a) || ph_dl_group_is_coll(b)) return ph_dl_group_is_coll(a) && ph_dl_group_is_coll(b) && !strcmp(a->group, b->group);
+  if (!strcmp(a->type, "series") && !strcmp(b->type, "series")) {
+    if (a->id[0] && b->id[0]) return !strcmp(a->id, b->id);
+    char an[256], bn[256]; series_norm(a->name, an, sizeof an); series_norm(b->name, bn, sizeof bn);
+    return an[0] && !strcmp(an, bn);
+  }
+  return !strcmp(a->group, b->group) && !strcmp(a->id, b->id);
+}
 static int grp_count(const Dl *d) { int n = 0; for (int j = 0; j < ph_dl_count(); j++) if (same_grp(ph_dl_get(j), d)) n++; return n; }
 static int grp_all_sel(const Dl *d) { for (int j = 0; j < ph_dl_count(); j++) { const Dl *o = ph_dl_get(j); if (same_grp(o, d) && !is_sel(o)) return 0; } return 1; }
 static void grp_sel(const Dl *d, int on) { for (int j = 0; j < ph_dl_count(); j++) { const Dl *o = ph_dl_get(j); if (same_grp(o, d)) sel_set(o, on); } }
 /* deleting: the file, the engine's task and its part files, the entry; then "Deleted" */
 static void del_vid(const char *id, const char *vid) { for (int j = ph_dl_count() - 1; j >= 0; j--) { const Dl *o = ph_dl_get(j); if (!strcmp(o->id, id) && !strcmp(o->vid, vid)) { ph_dl_remove(j); return; } } }
-static void del_grp(const char *id, const char *g) { int cl = !strncmp(g, "coll:", 5), series = !strncmp(g, "series:", 7); for (int j = ph_dl_count() - 1; j >= 0; j--) { const Dl *o = ph_dl_get(j); if (series ? (!strcmp(o->type, "series") && !strcmp(o->id, id)) : ((cl || !strcmp(o->id, id)) && !strcmp(o->group, g))) ph_dl_remove(j); } }
+static void del_grp(const char *id, const char *g) {
+  int cl = !strncmp(g, "coll:", 5), series = !strncmp(g, "series:", 7);
+  for (int j = ph_dl_count() - 1; j >= 0; j--) {
+    const Dl *o = ph_dl_get(j); int match = 0;
+    if (series && !strcmp(o->type, "series")) { char k[260]; grp_key(o, k, sizeof k); match = !strcmp(k, g); }
+    else if (!series) match = (cl || !strcmp(o->id, id)) && !strcmp(o->group, g);
+    if (match) ph_dl_remove(j);
+  }
+}
 static void tip_ok(int a, int b) { (void)a; (void)b; store_set("dlTipSeen", "true"); pplat_haptic_k(HK_PICK, 0.6f); }
 static int dl_hold_ended(void);
 static void dl_pause_act(int i, int b) { (void)b; if (dl_hold_ended()) return; ph_dl_retry(i); pplat_haptic_k(HK_PICK, 0.6f); } /* its own button: pause or go on */
@@ -241,7 +272,8 @@ static void prog_line(DlRow *r, const Dl *dd, float x, float y, float w, int st,
   text_draw(l1, x, y, F_SMALL, 600, TXT2, 0, w, ALIGN_START); if (l2[0]) text_draw(l2, x, y + 32, F_SMALL - 1, 600, TXT3, 0, w, ALIGN_START); }
 static float dl_card(int i, float y, float ink) {
   const Dl *d = ph_dl_get(i); int n = ph_dl_count(); float x = PAD, w = SB_W - 2 * PAD; char key[260]; grp_key(d, key, sizeof key);
-  int ne = d->group[0] ? grp_count(d) : 1, grp = ne > 1, emin = 9999, emax = 0;
+  int series = !ph_dl_group_is_coll(d) && !strcmp(d->type, "series");
+  int ne = series ? grp_count(d) : (d->group[0] ? grp_count(d) : 1), grp = series || ne > 1, emin = 9999, emax = 0;
   long long got = 0, size = 0, spd = 0; int conns = 0, cnt = 0, done = 0, run = 0, choose = 0, bad = 0, paused = 0;
   for (int j = 0; j < n; j++) { const Dl *o = ph_dl_get(j); if (grp ? !same_grp(o, d) : j != i) continue; cnt++; long long os = o->size; got += o->state == DL_DONE ? os : o->got; size += os; if (o->state == DL_RUNNING) { spd += o->speed; conns += o->conns; }
     done += o->state == DL_DONE || o->state == DL_INPACK; run += o->state == DL_RUNNING || o->state == DL_QUEUED; choose += o->state == DL_CHOOSING; bad += o->state == DL_NOSTREAM || o->state == DL_FAILED; paused += o->state == DL_PAUSED;
@@ -258,9 +290,21 @@ static float dl_card(int i, float y, float ink) {
     tween_to(&R->sel, selMode ? 1 : 0, 0.3f, EASE_WEB); tween_tick(&R->sel, phDt); float sk = R->sel.v, inset = 64 * sk; /* Select: a round tick slides in on the left */
     int picked = grp ? grp_all_sel(d) : is_sel(d);
     float sx = swipe(R, x, y, w, h); swipe_under(R, x, y, w, h + extra, sx, 24); gfx_offset_push(-sx, 0); { float lk = 1 - 0.015f * R->lift.v; gfx_scale_push(lk, lk, x + w / 2, y + h / 2); } if (R->lift.v > 0.01f) gfx_shadow(x, y + 8 * R->lift.v, w, h, 24, 24 * R->lift.v, BLACK_A((int)(110 * R->lift.v))); /* taken: it lifts a little off the page */
+    Palette artPal; uint32_t artTint = ACC2 | 0xff000000u;
+    if (d->bg[0] && img_palette(d->bg, 320, 180, 0, &artPal) > 0) {
+      Swatch sw = artPal.vibrant.ok ? artPal.vibrant : artPal.muted.ok ? artPal.muted : artPal.darkMuted;
+      if (sw.ok) artTint = hsl2rgb(sw.h, clampf(sw.s, 0.38f, 0.82f), clampf(sw.l, 0.36f, 0.62f));
+    }
     gfx_rrect(x, y, w, h + extra, 24, SURF);
-    if (d->bg[0]) { GLuint backdrop = img_get_shaped(d->bg, (int)w, (int)h, 24, 2); if (backdrop) { gfx_image(backdrop, x, y, w, h, 0, WHITE_A(105), 0, 1, 1, 0); gfx_rrect_v(x, y, w, h, 24, BLACK_A(105), BLACK_A(205)); } }
-    gfx_ring(x, y, w, h + extra, 24, 1, picked && selMode ? col_alpha(ACC2 | 0xff000000u, 0.9f) : WHITE_A(12));
+    if (d->bg[0]) {
+      GLuint backdrop = img_get_shaped(d->bg, (int)w, (int)h, 24, 2);
+      if (backdrop) {
+        gfx_image(backdrop, x, y, w, h, 0, WHITE_A(94), 0, 1, 1, 0);
+        gfx_rrect_v(x, y, w, h, 24, BLACK_A(118), BLACK_A(218));
+        gfx_rrect_v(x, y, w, 7, 24, col_alpha(artTint, 0.55f), col_alpha(artTint, 0.02f));
+      }
+    }
+    gfx_ring(x, y, w, h + extra, 24, 1, picked && selMode ? col_alpha(artTint, 0.98f) : col_alpha(artTint, 0.52f));
     float pk = press_k(x, y, w, h); if (pk > 0 && sx < 2) gfx_rrect(x, y, w, h, 24, WHITE_A((int)(14 * pk)));
     if (sk > 0.01f) { float cx = x + 20 + 22 * sk, cy = y + h / 2; gfx_opacity_push(sk); gfx_ring(cx - 16, cy - 16, 32, 32, 16, 2, picked ? ACC2 : WHITE_A(110)); if (picked) { gfx_circle(cx, cy, 16, ACC2 | 0xff000000u); icon_draw("ph_check", cx - 12, cy - 12, 24, RGB(14, 12, 20)); } gfx_opacity_pop(); }
     float pw = 120, ph = 180, px = x + 15 + inset; int cg = grp && ph_dl_group_is_coll(d); const char *pst = d->poster; /* (a collection: its own poster and name, its films under it) */
@@ -278,7 +322,7 @@ static float dl_card(int i, float y, float ink) {
     prog_line(R, grp ? NULL : d, tx, y + h - 80, tw + 60, st, 0);
     float pr = R->size > 0 ? (float)((double)R->got / R->size) : 0; tween_to(&R->bar, pr, 1.0f, EASE_CSS_EASE); tween_tick(&R->bar, phDt); /* (eased across each second's reading: smooth, never racing) */
     tween_to(&R->paused, st == DL_RUNNING || st == DL_CHOOSING || st == DL_DONE ? 0 : 1, 0.3f, EASE_CSS_EASE); tween_tick(&R->paused, phDt);
-    if (st != DL_DONE) { float bw = x + w - 24 - tx; gfx_rrect(tx, y + h - 22, bw, 6, 3, WHITE_A(30)); gfx_rrect(tx, y + h - 22, bw * R->bar.v, 6, 3, col_mix(ACC | 0xff000000u, WHITE_A(140), R->paused.v)); }
+    if (st != DL_DONE) { float bw = x + w - 24 - tx; gfx_rrect(tx, y + h - 22, bw, 6, 3, WHITE_A(30)); gfx_rrect(tx, y + h - 22, bw * R->bar.v, 6, 3, col_mix(artTint, WHITE_A(140), R->paused.v)); }
     /* the button: play when kept; else pause and go on, the two signs crossing over */
     { float bx = x + w - 66, by = y + h / 2 - 6; if (grp) { icon_draw_rot("ph_chev", bx - 18, by - 18, 36, WHITE_A(200), 90 * ok); hit_act(bx - 40, y, 80, h, grp_tap, i, 1); }
       else if (st == DL_DONE) { gfx_circle(bx, by, 36, WHITE_A(240)); icon_draw("play", bx - 20, by - 20, 40, RGB(14, 12, 20)); }
@@ -300,9 +344,14 @@ static float dl_card(int i, float y, float ink) {
         int ep = is_sel(o); gfx_rrect(rx, ry, rw, rh, 18, ep && selMode ? col_alpha(ACC, 0.22f) : WHITE_A(8)); float ppk = press_k(rx, ry, rw, rh); if (ppk > 0 && esx < 2) gfx_rrect(rx, ry, rw, rh, 18, WHITE_A((int)(14 * ppk)));
         float ex0 = rx + 24 + inset; if (sk > 0.01f) { float cx = rx + 16 + 22 * sk, cy = ry + rh / 2; gfx_opacity_push(sk); gfx_ring(cx - 13, cy - 13, 26, 26, 13, 2, ep ? ACC2 : WHITE_A(110)); if (ep) gfx_circle(cx, cy, 13, ACC2 | 0xff000000u); gfx_opacity_pop(); }
         rowEta[0] = 0;
-        { const char *w2 = ph_dl_wait_word(o) ? ph_dl_wait_word(o) : st_word(o->state); float tw2 = text_draw(w2, ex0, ry + 50, F_TINY, 700, o->state == DL_NOSTREAM || o->state == DL_FAILED ? RGB(0xef, 0x8f, 0x8a) : o->state == DL_RUNNING ? ACC2 : TXT3, 0, rw * 0.5f, ALIGN_START);
+        { double wp = 0, wd = 0; char watchLabel[64] = "";
+          if (ph_dl_watch_info(o, &wp, &wd) && wd > 0) {
+            if (wp >= wd * 0.95) snprintf(watchLabel, sizeof watchLabel, "%s", T("Watched"));
+            else { char mins[16]; long leftMin = (long)ceil((wd - wp) / 60.0); if (leftMin < 1) leftMin = 1; snprintf(mins, sizeof mins, "%ld", leftMin); snprintf(watchLabel, sizeof watchLabel, "%s", T1("{n} min left", "n", mins)); }
+          }
+          const char *w2 = watchLabel[0] ? watchLabel : ph_dl_wait_word(o) ? ph_dl_wait_word(o) : st_word(o->state); float tw2 = text_draw(w2, ex0, ry + 50, F_TINY, 700, o->state == DL_NOSTREAM || o->state == DL_FAILED ? RGB(0xef, 0x8f, 0x8a) : o->state == DL_RUNNING ? ACC2 : TXT3, 0, rw * 0.5f, ALIGN_START);
           if (E->size > 0) { text_draw("\xc2\xb7", ex0 + tw2 + 10, ry + 50, F_TINY, 700, TXT3, 0, 0, ALIGN_START); prog_line(E, o, ex0 + tw2 + 24, ry + 50, rx + rw - 160 - (ex0 + tw2 + 24), o->state, 1); } }
-        { float ew = rowEta[0] ? text_width(rowEta, F_TINY, 600, 0) + 16 : 0, right = rx + rw - 164; /* its name, and across from it its time left (clear of its ring) */
+ ? text_width(rowEta, F_TINY, 600, 0) + 16 : 0, right = rx + rw - 164; /* its name, and across from it its time left (clear of its ring) */
           if (rowEta[0]) text_draw(rowEta, right, ry + 14 + (text_line_height(F_SMALL + 1) - text_line_height(F_TINY)) / 2.0f, F_TINY, 600, TXT3, 0, 0, ALIGN_END);
           text_draw(cg ? o->name : o->ep, ex0, ry + 14, F_SMALL + 1, 700, TXT, 0, right - ew - ex0 - 8, ALIGN_START); } /* (a collection's row: its film's name) */
         /* its ring: fills as it comes; paused, the pause sign comes into it */
