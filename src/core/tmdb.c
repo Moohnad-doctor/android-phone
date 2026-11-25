@@ -105,13 +105,16 @@ typedef struct Job { struct Job *next; char type[8], id[16], lang[8], key[420]; 
 static pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
 static Job *qHead, *qTail, *done; static int workersOn; static volatile int haveDone;
 static double now_ms(void) { struct timeval tv; gettimeofday(&tv, NULL); return tv.tv_sec * 1000.0 + tv.tv_usec / 1000.0; }
-static const char *best_image(const cJSON *list, const char *lang) { /* the most voted one in that language, PNG before SVG (logos are drawn as pictures) */
-  const cJSON *x, *b = NULL;
-  cJSON_ArrayForEach(x, list) { const char *fp = js_str(x, "file_path", ""); size_t n = strlen(fp);
-    if (strcmp(js_str(x, "iso_639_1", ""), lang) || (n >= 4 && !strcasecmp(fp + n - 4, ".svg"))) continue;
-    double va = js_num(x, "vote_average", 0), vb = b ? js_num(b, "vote_average", 0) : 0;
-    if (!b || va > vb || (va == vb && js_num(x, "vote_count", 0) > js_num(b, "vote_count", 0))) b = x; }
-  return b ? js_str(b, "file_path", "") : "";
+static const char *best_image(const cJSON *list, const char *lang) { /* prefer the UI language, then English, then language-neutral artwork */
+  const char *want[3] = { lang, "en", "" }; int nw = !strcmp(lang, "ar") || !strcmp(lang, "ar-SA") ? 3 : 2;
+  const cJSON *x;
+  for (int pass = 0; pass < nw; pass++) { const cJSON *best = NULL;
+    cJSON_ArrayForEach(x, list) { const char *fp = js_str(x, "file_path", ""); size_t n = strlen(fp);
+      if (strcmp(js_str(x, "iso_639_1", ""), want[pass]) || (n >= 4 && !strcasecmp(fp + n - 4, ".svg"))) continue;
+      double va = js_num(x, "vote_average", 0), vb = best ? js_num(best, "vote_average", 0) : 0;
+      if (!best || va > vb || (va == vb && js_num(x, "vote_count", 0) > js_num(best, "vote_count", 0))) best = x; }
+    if (best) return js_str(best, "file_path", ""); }
+  return "";
 }
 typedef struct { pthread_mutex_t m; const Job *j; int tid, *ss, nss, next; cJSON *eps; } Seasons;
 static void *season_worker(void *arg) {
@@ -140,8 +143,9 @@ static cJSON *fetch(const Job *j, int *err, int *none) {
   const char *kind = !strcmp(j->type, "series") ? (tv ? "tv" : mv ? "movie" : "") : (mv ? "movie" : tv ? "tv" : "");
   if (!*kind) { cJSON_Delete(f); *none = 1; return NULL; }
   int tid = (int)js_num(!strcmp(kind, "tv") ? tv : mv, "id", 0); cJSON_Delete(f);
-  char il[3]; snprintf(il, sizeof il, "%s", j->lang); const char *rg = j->lang[2] == '-' ? j->lang + 3 : ""; /* pt-BR: the words of "pt" in "BR", the pictures of "pt" */
-  snprintf(p, sizeof p, "/%s/%d?language=%s&append_to_response=images,translations&include_image_language=%s", kind, tid, j->lang, il);
+  char il[3]; snprintf(il, sizeof il, "%.2s", j->lang); const char *rg = j->lang[2] == '-' ? j->lang + 3 : ""; /* pt-BR: the words of "pt" in "BR", the pictures of "pt" */
+  char imageLang[32]; if (!strcmp(il, "ar")) snprintf(imageLang, sizeof imageLang, "ar,en,null"); else snprintf(imageLang, sizeof imageLang, "%s,en,null", il);
+  snprintf(p, sizeof p, "/%s/%d?language=%s&append_to_response=images,translations&include_image_language=%s", kind, tid, j->lang, imageLang);
   cJSON *d = tmdb_get(p, j->key, &st);
   if (!d || !js_num(d, "id", 0)) { cJSON_Delete(d); *err = E_NET; return NULL; }
   const char *name = "", *ov = ""; const cJSON *t;
@@ -248,7 +252,7 @@ static void drain(void) {
   if (!inited) tmdb_init(); /* on first use: nothing to start at launch */
   unsigned f = app_frame(); if (f == lastFrame) return; lastFrame = f;
   pthread_mutex_lock(&mu); int kg = phoneKeyGen != seenKeyGen; if (kg) { seenKeyGen = phoneKeyGen; snprintf(key, sizeof key, "%s", phoneKey); } pthread_mutex_unlock(&mu);
-  if (kg || resetReq || strcmp(tabLang, i18n_lang())) { resetReq = 0; snprintf(tabLang, sizeof tabLang, "%s", i18n_lang()); reset(); }
+  if (kg || resetReq || strcmp(tabLang, i18n_lang())) { resetReq = 0; snprintf(tabLang, sizeof tabLang, "%s", !strcmp(i18n_lang(), "ar") ? "ar-SA" : i18n_lang()); reset(); }
   if (nent > MAX_ENT) evict();
   if (!haveDone) return;
   pthread_mutex_lock(&mu); Job *list = done; done = NULL; haveDone = 0; pthread_mutex_unlock(&mu);
@@ -257,7 +261,7 @@ static void drain(void) {
 static void enqueue(const char *type, const char *id, int light, int first) {
   Job *j = calloc(1, sizeof *j);
   snprintf(j->type, sizeof j->type, "%s", !strcmp(type, "series") ? "series" : "movie"); snprintf(j->id, sizeof j->id, "%s", id);
-  snprintf(j->lang, sizeof j->lang, "%s", i18n_lang()); snprintf(j->key, sizeof j->key, "%s", key); j->light = light; j->gen = gen;
+  snprintf(j->lang, sizeof j->lang, "%s", !strcmp(i18n_lang(), "ar") ? "ar-SA" : i18n_lang()); snprintf(j->key, sizeof j->key, "%s", key); j->light = light; j->gen = gen;
   pthread_mutex_lock(&mu);
   if (!workersOn) { workersOn = 1; for (int i = 0; i < WORKERS; i++) { pthread_t t; if (!pthread_create(&t, NULL, worker, NULL)) pthread_detach(t); } }
   if (first) { j->next = qHead; qHead = j; if (!qTail) qTail = j; }
