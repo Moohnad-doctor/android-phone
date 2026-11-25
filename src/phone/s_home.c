@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include "phone/phone.h"
 #include "core/keys.h"
 #include "core/i18n.h"
@@ -131,8 +132,49 @@ static void cw_card_labels(const ItemList *l, const Scroll *s, float y) {
 static void got_row(ItemList *l, int cached, void *ud) { (void)cached; unsigned tag = (unsigned)(uintptr_t)ud; Board *b = &B[tag >> 24]; int i = (tag >> 8) & 255; if ((tag & 255) != (b->gen & 255) || i >= b->n || !l) { if (l) itemlist_free(l); return; }
   HRow *r = &b->rows[i]; if (!l->n && l->total < 0 && !r->list.n && r->retries < 3) { static const double W[3] = { 8, 20, 45 }; r->retryAt = app_now() + W[r->retries]; r->retries++; itemlist_free(l); fprintf(stderr, "[home] %s: no answer, asked again in %.0f s\n", r->def.title, W[r->retries - 1]); return; } /* (an addon that makes its lists on demand: a slow first answer is not the end of the row) */
   if (l->n > 0 || !r->got) { itemlist_clear(&r->list); r->list = *l; free(l); } else itemlist_free(l); r->got = 1; }
+static int home_has(const char *s, const char *needle) {
+  if (!s || !needle || !*needle) return 0;
+  for (; *s; s++) { const char *a = s, *b = needle; while (*a && *b && tolower((unsigned char)*a) == tolower((unsigned char)*b)) { a++; b++; } if (!*b) return 1; }
+  return 0;
+}
+static int home_pick(const CatalogDef *src, int n, const char *type, const char *const *words, int nw, const int *used) {
+  for (int i = 0; i < n; i++) {
+    if (used && used[i]) continue;
+    if (type && strcmp(src[i].type, type)) continue;
+    for (int k = 0; k < nw; k++) if (home_has(src[i].title, words[k])) return i;
+  }
+  return -1;
+}
+static int home_curate(CatalogDef *out, int max) {
+  CatalogDef all[MAXR]; int n = sb_home_defs(all, MAXR), used[MAXR] = {0}, count = 0;
+  static const char *trend[] = { "trending", "popular", "top" };
+  static const char *now[] = { "now playing", "airing", "currently" };
+  static const char *movie[] = { "movies", "movie", "film" };
+  static const char *series[] = { "series", "shows", "tv" };
+  static const char *anime[] = { "anime", "animation" };
+  const char *labels[5] = { "Trending now", "Now playing", "Movies", "Series", "Anime" };
+  const char *types[5] = { NULL, "movie", "movie", "series", "series" };
+  const char *const *terms[5] = { trend, now, movie, series, anime };
+  const int lens[5] = { 3, 3, 3, 3, 2 };
+  for (int slot = 0; slot < 5 && count < max; slot++) {
+    int pick = home_pick(all, n, types[slot], terms[slot], lens[slot], used);
+    if (pick < 0 && slot == 0) pick = home_pick(all, n, "movie", movie, 3, used);
+    if (pick < 0 && slot == 1) pick = home_pick(all, n, "movie", movie, 3, used);
+    if (pick < 0 && slot == 2) pick = home_pick(all, n, "movie", movie, 3, used);
+    if (pick < 0 && slot == 3) pick = home_pick(all, n, "series", series, 3, used);
+    if (pick < 0 && slot == 4) pick = home_pick(all, n, "series", anime, 2, used);
+    if (pick < 0) {
+      for (int i = 0; i < n; i++) if (!used[i] && (!types[slot] || !strcmp(all[i].type, types[slot]))) { pick = i; break; }
+    }
+    if (pick < 0 && n) pick = slot < 3 ? 0 : n - 1;
+    if (pick < 0) continue;
+    out[count] = all[pick]; snprintf(out[count].title, sizeof out[count].title, "%s", labels[slot]);
+    used[pick] = 1; count++;
+  }
+  return count;
+}
 static void load(Board *b, int disc) {
-  CatalogDef defs[MAXR]; int n = disc ? sb_disc_defs(defs, MAXR) : sb_home_defs(defs, MAXR);
+  CatalogDef defs[MAXR]; int n = disc ? sb_disc_defs(defs, MAXR) : home_curate(defs, 5);
   live_refresh(0); if (live_catalogs() > 0) { int k = 0; for (int i = 0; i < n; i++) if (!live_type(defs[i].type)) defs[k++] = defs[i]; n = k; } /* the live catalogs: in the Live TV row's All channels, not as rows of posters */
   for (int i = 0; i < b->n; i++) itemlist_clear(&b->rows[i].list); memset(b->rows, 0, sizeof b->rows); b->n = n; b->gen++;
   for (int i = 0; i < n; i++) { b->rows[i].def = defs[i]; b->rows[i].retries = 0; b->rows[i].retryAt = 0; sb_catalog(&b->rows[i].def, got_row, (void *)(uintptr_t)((disc << 24) | (i << 8) | (b->gen & 255))); }
