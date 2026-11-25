@@ -8,16 +8,20 @@ VERSION=7.1.1
 SRC="$W/ffmpeg-$VERSION"
 NDK_ROOT="${NDK:-${ANDROID_NDK_ROOT:-$HOME/stremiobrew-build/android/sdk/ndk/27.2.12479018}}"
 NDK="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin"
+API="${API:-24}"
 [ -f "$SRC/configure" ] || { echo "no FFmpeg source at $SRC" >&2; exit 1; }
-[ -x "$NDK/llvm-ar" ] && [ -x "$NDK/llvm-strip" ] || { echo "Linux NDK tools not found at $NDK" >&2; exit 1; }
+[ -x "$NDK/llvm-ar" ] && [ -x "$NDK/llvm-strip" ] && [ -x "$NDK/clang" ] || { echo "Linux NDK tools not found at $NDK" >&2; exit 1; }
 ABIS=("$@")
-[ "${#ABIS[@]}" -gt 0 ] || ABIS=(arm64-v8a armeabi-v7a)
+[ "${#ABIS[@]}" -gt 0 ] || ABIS=(arm64-v8a)
 for ABI in "${ABIS[@]}"; do
   case "$ABI" in
-    arm64-v8a) TC="$W/tc-atv-arm64"; ARCH=aarch64 ;;
-    armeabi-v7a) TC="$W/tc-atv-armv7"; ARCH=arm ;;
+    arm64-v8a) TC="$W/tc-phone-arm64"; ARCH=aarch64; TRIPLE="aarch64-linux-android$API" ;;
+    armeabi-v7a) TC="$W/tc-phone-armv7"; ARCH=arm; TRIPLE="armv7a-linux-androideabi$API" ;;
     *) echo "unknown ABI: $ABI" >&2; exit 1 ;;
   esac
+  mkdir -p "$TC"
+  printf '#!/usr/bin/env bash\\nexec "%s/clang" --target=%s -fPIC "$@"\\n' "$NDK" "$TRIPLE" > "$TC/cc"
+  chmod 755 "$TC/cc"
   B="$W/build-phone-prev2-$ABI"
   P="$W/prefix-phone-prev2-$ABI"
   mkdir -p "$B"
