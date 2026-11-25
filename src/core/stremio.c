@@ -1156,7 +1156,14 @@ typedef struct { void (*cb)(ItemList *, char[6][128], int, void *); void *ud; } 
 static void on_sug(int st, const unsigned char *b, size_t n, void *ud) {
   SugReq *r = ud; cJSON *j = st == 200 ? net_json(b) : NULL; const cJSON *d = js_arr(j, "d"), *x;
   ItemList *l = calloc(1, sizeof *l); l->items = calloc(16, sizeof(Item)); char names[6][128]; int nn = 0;
-  if (d) cJSON_ArrayForEach(x, d) { if (l->n >= 12) break; const char *id = js_str(x, "id", ""), *qid = js_str(x, "qid", ""); if (strncmp(id, "tt", 2)) continue;
+  if (d) cJSON_ArrayForEach(x, d) { const char *id = js_str(x, "id", ""), *qid = js_str(x, "qid", ""), *label = js_str(x, "l", "");
+    /* IMDb person suggestions are search terms too: selecting one dispatches that name to Cinemeta and every
+       installed catalog declaring the search extra, rather than silently dropping actor queries. */
+    if (!strncmp(id, "nm", 2) || !strcmp(qid, "name")) {
+      if (nn < 6 && label[0]) { int dup = 0; for (int i = 0; i < nn; i++) if (!strcasecmp(names[i], label)) dup = 1; if (!dup) copy_str(names[nn++], 128, label); }
+      continue;
+    }
+    if (strncmp(id, "tt", 2) || l->n >= 12) continue;
     const char *type = (!strcmp(qid, "tvSeries") || !strcmp(qid, "tvMiniSeries")) ? "series" : (!strcmp(qid, "movie") || !strcmp(qid, "tvMovie") || !strcmp(qid, "tvSpecial") || !strcmp(qid, "short") || !strcmp(qid, "video")) ? "movie" : NULL; if (!type) continue;
     Item *it = &l->items[l->n++]; memset(it, 0, sizeof *it); copy_str(it->id, sizeof it->id, id); copy_str(it->type, sizeof it->type, type); copy_str(it->name, sizeof it->name, js_str(x, "l", ""));
     const char *img = js_str(js_obj(x, "i"), "imageUrl", NULL); if (img) { copy_str(it->poster, sizeof it->poster, img); char *v = strstr(it->poster, "._V1_."); if (v) { char ext[8]; copy_str(ext, sizeof ext, v + 5); snprintf(v, sizeof it->poster - (v - it->poster), "._V1_QL75_UX300_%s", ext); } }
