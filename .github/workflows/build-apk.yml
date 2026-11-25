@@ -133,7 +133,7 @@ jobs:
           ET.parse("android-phone/app/src/main/res/values/strings.xml")
           print("Workflow YAML and Android XML resources parse successfully")
           PY
-          if grep -R -n 'darwin-x86_64' tools/phone tools/build-engine.sh; then
+          if grep -R -n 'darwin-x86_64' tools/phone tools/build-engine.sh tools/gopeed/build.sh; then
             echo "A macOS NDK host path remains in the Android build scripts" >&2
             exit 1
           fi
