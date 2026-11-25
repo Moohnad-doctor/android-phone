@@ -187,7 +187,7 @@ static void disc_grid(Board *b) {
 static void on_disc(ItemList *l, int cached, void *ud) {
   (void)cached; int mi; if (!dud_ok(ud, &mi)) { itemlist_free(l); return; }
   if (DS.nm == 1) { /* one catalog: its answer is the listing (its fresh answer replaces its kept one), as before */
-    itemlist_clear(&DS.all); itemlist_clear(&DS.part[0]); DS.used[0] = 0; DS.all = *l; free(l); DS.has[0] = 1; DS.mSkip[0] = DS.all.total > DS.all.n ? DS.all.total : DS.all.n; DS.mMore[0] = DS.m[0].skip && DS.all.n > 0; DS.more = DS.mMore[0]; DS.paging = 0;
+    itemlist_clear(&DS.all); itemlist_clear(&DS.part[0]); DS.used[0] = 0; DS.all = *l; free(l); year_keep(&DS.all); sort_items(&DS.all); DS.has[0] = 1; DS.mSkip[0] = DS.all.total > DS.all.n ? DS.all.total : DS.all.n; DS.mMore[0] = DS.m[0].skip && DS.all.n > 0; DS.more = DS.mMore[0]; DS.paging = 0;
     Board *b = &boards[1]; disc_grid(b); if (cur() == b) hero_soon(b, 0); return; }
   if (DS.has[mi] && DS.used[mi]) { itemlist_free(l); return; } /* (several: a fresh answer after the kept one is used only if nothing of it shows yet) */
   itemlist_clear(&DS.part[mi]); DS.part[mi] = *l; free(l); DS.has[mi] = 1; DS.mSkip[mi] = DS.part[mi].total > DS.part[mi].n ? DS.part[mi].total : DS.part[mi].n; DS.mMore[mi] = DS.m[mi].skip && DS.part[mi].n > 0;
@@ -206,7 +206,7 @@ static void on_disc_page1(ItemList *l, int more, void *ud) { /* one catalog: its
   int mi; if (!dud_ok(ud, &mi)) { itemlist_free(l); return; } DS.paging = 0; if (!l) { DS.pageAt = app_now() + 10; return; }
   int got = l->n, add = 0; Item *g = realloc(DS.all.items, (size_t)(DS.all.n + l->n + 1) * sizeof(Item));
   if (g) { DS.all.items = g; for (int i = 0; i < l->n; i++) { int dup = 0; for (int k = 0; k < DS.all.n && !dup; k++) dup = !strcmp(DS.all.items[k].id, l->items[i].id); if (!dup && l->items[i].id[0]) { DS.all.items[DS.all.n++] = l->items[i]; add++; } } }
-  itemlist_free(l); DS.mSkip[0] += got; if (!got || !add || !more || DS.all.n >= (MAXROWS - 2) * grid_n()) DS.more = 0;
+  itemlist_free(l); year_keep(&DS.all); sort_items(&DS.all); DS.mSkip[0] += got; if (!got || !add || !more || DS.all.n >= (MAXROWS - 2) * grid_n()) DS.more = 0;
   disc_grid(&boards[1]);
 }
 /* the members' titles into the listing, in turn, each once: only as far as every member that still has titles (or
@@ -219,6 +219,7 @@ static void disc_merge(void) {
     for (int i = 0; i < DS.nm; i++) { if (DS.used[i] >= DS.part[i].n) continue; Item *it = &DS.part[i].items[DS.used[i]++]; if (!it->id[0]) continue;
       int dup = 0; for (int k = 0; k < DS.all.n && !dup; k++) dup = !strcmp(DS.all.items[k].id, it->id); if (dup) continue;
       Item *g = realloc(DS.all.items, (size_t)(DS.all.n + 1) * sizeof(Item)); if (!g) break; DS.all.items = g; DS.all.items[DS.all.n++] = *it; add++; } }
+  year_keep(&DS.all); sort_items(&DS.all);
   int more = 0; for (int i = 0; i < DS.nm; i++) more |= DS.mMore[i]; DS.more = more && DS.all.n < (MAXROWS - 2) * grid_n();
   if (add || !DS.more) { Board *b = &boards[1]; int first = DS.all.n == add; disc_grid(b); if (first && cur() == b) hero_soon(b, 0); }
 }
@@ -820,9 +821,9 @@ static void filt_draw(Board *b, Row *r, int ri, float y, float rowA, int active)
   float hx = 0, hw = 0, hh = h, ha = FL.ha.v; { float ax, aw, bx2, bw2; hl_rect(FL.hFrom, &ax, &aw); hl_rect(FL.hTo, &bx2, &bw2); float g = FL.hk.v; if (aw <= 0) { ax = bx2; aw = bw2; } hx = ax + (bx2 - ax) * g; hw = aw + (bw2 - aw) * g;
     float ah = FL.hFrom >= 100 ? OPT_H : h, bh = FL.hTo >= 100 ? OPT_H : h; hh = ah + (bh - ah) * g; } /* (its height too: a choice is smaller than a pill) */
   /* the pills (quiet), the highlight over them, then their words (taking the highlight's colours where it lies) */
-  for (int i = 0; i < n; i++) { int set = i == 2 && FL.genre[0]; float px = FL.cx[i]; gfx_rrect(px, cy, w[i], h, h / 2, WHITE_A(active ? 24 : 18)); gfx_ring(px, cy, w[i], h, h / 2, set ? 2 : 1, set ? col_alpha(ACC2, 0.9f) : WHITE_A(36)); }
+  for (int i = 0; i < n; i++) { int set = (i == 2 && FL.genre[0]) || (i == 3 && FL.decade) || (i == 4 && FL.sort); float px = FL.cx[i]; gfx_rrect(px, cy, w[i], h, h / 2, WHITE_A(active ? 24 : 18)); gfx_ring(px, cy, w[i], h, h / 2, set ? 2 : 1, set ? col_alpha(ACC2, 0.9f) : WHITE_A(36)); }
   if (ha > 0.001f && hw > 1) { float nx = nudge_x(&r->nudge); int inLine = FL.hFrom >= 100 && FL.hTo >= 100 && FL.rroom > 1; if (inLine) gfx_clip_push(FL.rx0, cy - 8, FL.rroom, h + 16); lglass_accent(hx + nx, cy + (h - hh) / 2, hw, hh, hh / 2, ha); if (inLine) gfx_clip_pop(); } /* (along the choices: inside their room) */
-  for (int i = 0; i < n; i++) { int set = i == 2 && FL.genre[0]; float px = FL.cx[i], u = hl_over(hx, hw, px, w[i]) * ha;
+  for (int i = 0; i < n; i++) { int set = (i == 2 && FL.genre[0]) || (i == 3 && FL.decade) || (i == 4 && FL.sort); float px = FL.cx[i], u = hl_over(hx, hw, px, w[i]) * ha;
     uint32_t tc = col_mix(WHITE_A(set ? 255 : 225), ACC_FG, u); float tx = rtl ? px + w[i] - 26 - tw[i] : px + 26;
     gfx_clip_push(px + 12, cy, w[i] - 24 - 18, h); text_draw(t[i], tx, cy + h / 2 - text_line_height(24) / 2, 24, 700, tc, 0, 0, ALIGN_LEFT); gfx_clip_pop(); /* (inside its pill while it changes size) */
     float ax = rtl ? px + 26 - 2 : px + w[i] - 26 - 18 + 2, ay = cy + h / 2 - 9, rk = i == FL.which ? FL.a.v : 0;
@@ -848,7 +849,7 @@ static void filt_open(int which) {
 }
 static void filt_close(void) { if (!FL.open) return; FL.open = 0; tween_to(&FL.a, 0, 0.26f, EASE_IN_OUT); } /* its choices go back into the pill, the pills after it close the gap */
 static void filt_apply(Board *b) { /* the listing asked again with the strip's choice; the focus stays on the strip, on the same pill */
-  int col = FL.which < 3 ? FL.which : 0; load_catalog_rows(b, 1, 0); b->rowIdx = 0; if (b->n && b->rows[0].filt) b->rows[0].col = col; b->featOn = 0; timer_start(&b->fade, 0.5f); for (int i = 0; i < b->n; i++) { slide_row(&b->rows[i]); tween_set(&b->rows[i].off, b->rows[i].off.to); }
+  int col = FL.which < 5 ? FL.which : 0; load_catalog_rows(b, 1, 0); b->rowIdx = 0; if (b->n && b->rows[0].filt) b->rows[0].col = col; b->featOn = 0; timer_start(&b->fade, 0.5f); for (int i = 0; i < b->n; i++) { slide_row(&b->rows[i]); tween_set(&b->rows[i].off, b->rows[i].off.to); }
 }
 static void genre_default(void) { int req; char g[1][48]; FL.genre[0] = 0; if (disc_genres(g, 1, &req) > 0 && req) snprintf(FL.genre, sizeof FL.genre, "%s", g[0]); } /* (a genre the catalog needs: its first, as the official app) */
 static int filt_set(int i) { /* the choice i of the open pill taken (the official rules: a type resets its catalog and genre, a catalog its genre); 1 when it changed */
