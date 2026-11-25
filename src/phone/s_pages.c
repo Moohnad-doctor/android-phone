@@ -383,7 +383,12 @@ static void q_got(ItemList *l, int cached, void *ud) {
   } else if (l) itemlist_free(l);
 }
 static void q_sug(ItemList *l, char names[6][128], int nn, void *ud) { if ((unsigned)(uintptr_t)ud != Q.gen) { if (l) itemlist_free(l); return; } Q.nsug = nn > 6 ? 6 : nn; for (int i = 0; i < Q.nsug; i++) snprintf(Q.sug[i], 128, "%s", names[i]); itemlist_clear(&Q.sugItems); if (l) { Q.sugItems = *l; free(l); } }
-static void q_ask(void) { for (int i = 0; i < Q.nd; i++) itemlist_clear(&Q.res[i]); Q.nd = Q.got = 0; Q.gen++; Q.v.pos = Q.v.vel = 0; Q.fr = -1; Q.fi = 0; if (!Q.q[0]) Q.nsug = 0; itemlist_clear(&Q.sugItems); /* (the suggestions already shown stay) */ if (!Q.q[0]) return;
+static void q_ask(void) { for (int i = 0; i < Q.nd; i++) itemlist_clear(&Q.res[i]); Q.nd = Q.got = 0; Q.gen++; Q.v.pos = Q.v.vel = 0; Q.fr = -1; Q.fi = 0; if (!Q.q[0]) Q.nsug = 0; itemlist_clear(&Q.sugItems); /* (the suggestions already shown stay) */ if (!Q.q[0]) {
+    Q.nd = 2; Q.got = 0;
+    const char *types[2] = { "movie", "series" }, *titles[2] = { "Popular movies", "Popular series" };
+    for (int i = 0; i < 2; i++) { memset(&Q.defs[i], 0, sizeof Q.defs[i]); snprintf(Q.defs[i].type, sizeof Q.defs[i].type, "%s", types[i]); snprintf(Q.defs[i].title, sizeof Q.defs[i].title, "%s", T(titles[i])); snprintf(Q.defs[i].url, sizeof Q.defs[i].url, CINEMETA "/catalog/%s/top.json", types[i]); sb_catalog(&Q.defs[i], q_got, (void *)(uintptr_t)(((Q.gen & 0xffffff) << 8) | i)); }
+    return;
+  }
   Q.nd = sb_search_defs(Q.q, Q.defs, MAXQ);
   if (!Q.nd) {
     char enc[448]; addon_urlenc(Q.q, enc, sizeof enc);
@@ -413,26 +418,26 @@ static void q_tick(float dt) { (void)dt; if (!Q.sugAsked && Q.q[0] && app_now() 
 static void so_key_back(void);
 static void close_act(int a, int b) { (void)a; (void)b; so_key_back(); }
 static void q_draw(void) {
-  float fieldY = SB_H - (KB_H > INS_B ? KB_H : INS_B) - 18 - 88, top = INS_T + 88; /* the field rides on the keyboard */
+  float fieldY = INS_T + 122, top = fieldY + 104; /* the field rides on the keyboard */
   ph_drag(0, top, SB_W, fieldY - top, &Q.v, 1); scroll_tick(&Q.v);
   float y = top + 10 - Q.v.pos;
   for (int i = 0; i < Q.nd; i++) if (Q.res[i].n > 0) { char t[200]; snprintf(t, sizeof t, "%s", Q.defs[i].title); for (char *c = t; *c; c++) if (*c != ' ' && *c != '.' && (unsigned char)*c != 0xc2 && (unsigned char)*c != 0xb7 && *c != '-') { text_draw(t, PAD, y, F_H2 - 2, 800, TXT, -0.3f, SB_W - 2 * PAD, ALIGN_START); y += 52; break; } /* no heading when it has no words */ y += poster_grid(&Q.res[i], y, q_focus, i, Q.fr == i ? Q.fi : -1) + 20; }
   if (Q.q[0] && Q.asked && Q.got < Q.nd) spinner(SB_W / 2, y + 50, 20);
-  if (!Q.q[0]) { float iy = top + (fieldY - top) * 0.35f; icon_draw("ph_search", SB_W / 2 - 50, iy, 100, WHITE_A(40)); text_draw_wrapped(T("Films, series and people, from your addons."), SB_W / 2, iy + 130, SB_W - 4 * PAD, 3, F_BODY, 500, TXT2, 0, ALIGN_CENTER, 34); }
+  if (!Q.q[0] && Q.nd == 0) { float iy = top + 30; icon_draw("ph_search", SB_W / 2 - 34, iy, 68, WHITE_A(40)); text_draw_wrapped(T("Popular films and series. Search titles and people from your addons."), SB_W / 2, iy + 90, SB_W - 4 * PAD, 3, F_BODY, 500, TXT2, 0, ALIGN_CENTER, 34); }
   else if (Q.asked && Q.got >= Q.nd && Q.nd) { int any = 0; for (int i = 0; i < Q.nd; i++) any += Q.res[i].n; if (!any) text_draw(T("None found"), PAD, y + 10, F_BODY, 500, TXT2, 0, 0, ALIGN_START); }
-  Q.v.max = y + Q.v.pos - fieldY + 40;
-  { float th = INS_T + 88; gfx_rect(0, 0, SB_W, th, col_alpha(PAGE | 0xff000000u, 0.6f)); text_draw(T("Search"), PAD, INS_T + 44 - text_line_height(F_H2) / 2.0f, F_H2, 800, TXT, -0.3f, 0, ALIGN_START); }
+  Q.v.max = y + Q.v.pos - (SB_H - (KB_H > INS_B ? KB_H : INS_B)) + 40;
+  { float th = fieldY + 96; gfx_rect(0, 0, SB_W, th, col_alpha(PAGE | 0xff000000u, 0.6f)); }
   if (Q.editing && KB_H > 0) hit_act(0, 0, SB_W, SB_H, close_act, 0, 0); /* typing: a tap anywhere else puts the keyboard away and goes back to the page */
   /* the bottom: the page fades under it, suggestions rise above the field, nearest the thumb first */
-  gfx_rrect_v(0, fieldY - 100, SB_W, SB_H - fieldY + 100, 0, col_alpha(PAGE | 0xff000000u, 0), col_alpha(PAGE | 0xff000000u, 0.95f));
-  if (Q.q[0] && Q.nsug && Q.editing) { float rh = 76, sh = Q.nsug * rh + 16, sy = fieldY - 16 - sh;
+  gfx_rrect_v(0, 0, SB_W, fieldY + 96, 0, col_alpha(PAGE | 0xff000000u, 0.72f), col_alpha(PAGE | 0xff000000u, 0));
+  if (Q.q[0] && Q.nsug && Q.editing) { float rh = 64, sh = Q.nsug * rh + 16, sy = fieldY + 96;
     gfx_shadow(PAD - 8, sy, SB_W - 2 * PAD + 16, sh, 26, 30, BLACK_A(130)); glass_rrect(PAD - 8, sy, SB_W - 2 * PAD + 16, sh, 26, RGBA(30, 27, 40, 245), 0.16f, 0.02f, 0.6f); hit_shield(PAD - 8, sy, SB_W - 2 * PAD + 16, sh);
     for (int i = 0; i < Q.nsug; i++) { float ry = sy + 8 + (Q.nsug - 1 - i) * rh; if (ph_pressed(PAD, ry, SB_W - 2 * PAD, rh)) gfx_rrect(PAD, ry, SB_W - 2 * PAD, rh, 18, WHITE_A(16));
       icon_draw("ph_search", PAD + 16, ry + 20, 36, WHITE_A(110)); text_draw(Q.sug[i], PAD + 68, ry + rh / 2 - text_line_height(F_BODY) / 2.0f, F_BODY, 500, TXT, 0, SB_W - 2 * PAD - 84, ALIGN_START); hit_act(PAD, ry, SB_W - 2 * PAD, rh, sug_act, i, 0); } }
-  float r = 44, cy = fieldY + 44; int pr = ph_pressed(18, fieldY, 2 * r, 2 * r); gfx_shadow(18, fieldY + 6, 2 * r, 2 * r, r, 22, BLACK_A(120)); glass_rrect(18, fieldY, 2 * r, 2 * r, r, pr ? RGBA(60, 56, 74, 240) : RGBA(34, 31, 44, 236), 0.2f, 0.02f, 0.6f);
+  float r = 36, cy = fieldY + 44; int pr = ph_pressed(18, fieldY, 2 * r, 2 * r); gfx_shadow(18, fieldY + 6, 2 * r, 2 * r, r, 22, BLACK_A(120)); glass_rrect(18, fieldY, 2 * r, 2 * r, r, pr ? RGBA(18, 18, 20, 240) : RGBA(8, 8, 10, 236), 0.2f, 0.02f, 0.6f);
   icon_draw("ph_back", 18 + r - 22, cy - 22, 44, WHITE_A(240)); hit_act(18, fieldY, 2 * r, 2 * r, close_act, 0, 0);
   float fx = 18 + 2 * r + 12, fw = SB_W - 18 - fx; gfx_shadow(fx, fieldY + 6, fw, 88, 44, 22, BLACK_A(120));
-  glass_rrect(fx, fieldY, fw, 88, 44, RGBA(34, 31, 44, 240), 0.2f, 0.02f, 0.6f); if (Q.editing) gfx_ring(fx, fieldY, fw, 88, 44, 2, col_alpha(ACC2, 0.8f));
+  glass_rrect(fx, fieldY, fw, 88, 44, RGBA(8, 8, 10, 240), 0.2f, 0.02f, 0.6f); if (Q.editing) gfx_ring(fx, fieldY, fw, 88, 44, 2, col_alpha(ACC2, 0.8f));
   icon_draw("ph_search", fx + 22, cy - 20, 40, WHITE_A(150));
   hit_act(fx, fieldY, 76, 88, field_act, 0, 0); if (ted_field(q_ed(), fx + 76, fieldY, fw - 160, 88, F_BODY + 2, 500, TXT, T("Titles, people, genres"), WHITE_A(105), Q.editing, 0)) field_act(0, 0);
   if (Q.q[0]) { icon_draw("ph_x", fx + fw - 62, cy - 20, 40, WHITE_A(160)); hit_act(fx + fw - 84, fieldY, 84, 88, clear_act, 0, 0); }
