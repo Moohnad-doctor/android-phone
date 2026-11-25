@@ -144,7 +144,7 @@ static void circle(float cx, float cy, float r, const char *icon, int lit, PFn f
 }
 /* Compact player-HUD control; brightness/volume swipe handling remains in the independent gesture path. */
 static void hud_circle(float cx, float cy, float r, const char *icon, int lit, PFn fn, int a) {
-  r *= 0.55f;
+  /* Preserve the full radius for a comfortable visible control and touch target. */
   float pk = ppress(cx - r, cy - r, 2 * r, 2 * r), k = 1 - 0.1f * pk; gfx_scale_push(k, k, cx, cy);
   pglass(cx - r, cy - r, 2 * r, 2 * r, r, lit ? col_alpha(ACC, 0.72f) : BLACK_A(72), lit ? col_alpha(ACC, 0.85f) : BLACK_A(128), 0, pk);
   gfx_ring(cx - r, cy - r, 2 * r, 2 * r, r, 0.9f, WHITE_A(lit ? 0 : 36));
@@ -418,8 +418,8 @@ static float src_card(float x, float y, float w, int i, const char *nm, const ch
   float lh = 30, h = (nd > nn ? nd : nn) * lh + 32; if (h < 104) h = 104; if (y + h < lt - 20 || y > SB_H) return h + 10;
   float pk = ppress(x, y, w, h), k = 1 - 0.015f * pk; gfx_scale_push(k, k, x + w / 2, y + h / 2);
   gfx_rrect(x, y, w, h, 22, on ? col_alpha(ACC, 0.24f) : WHITE_A(pk > 0 ? (int)(12 + 22 * pk) : 9)); if (on) gfx_ring(x, y, w, h, 22, 2, col_alpha(ACC, 0.9f));
-  float lw = 230, ny = y + h / 2 - nn * lh / 2; char b[400];
-  for (int q = 0; q < nn; q++) { snprintf(b, sizeof b, "%.*s", nl[q], ns[q]); text_draw(b, x + 22, ny + q * lh + 2, 25, 800, WHITE_A(on ? 255 : 240), 0, lw - 30, ALIGN_START); }
+  float lw = fminf(320.0f, w * 0.36f), ny = y + h / 2 - nn * lh / 2; char b[400];
+  for (int q = 0; q < nn; q++) { snprintf(b, sizeof b, "%.*s", nl[q], ns[q]); text_draw(b, x + 22, ny + q * lh + 2, 25, 800, WHITE_A(on ? 255 : 240), 0, fmaxf(40.0f, lw - 44), ALIGN_START); }
   gfx_rect(x + lw, y + 18, 1.5f, h - 36, WHITE_A(30));
   float tx = x + lw + 20, tw = x + w - tx - (on ? 70 : 20), dy = y + h / 2 - nd * lh / 2;
   for (int q = 0; q < nd; q++) { snprintf(b, sizeof b, "%.*s", dl[q], ds[q]); text_draw(b, tx, dy + q * lh + 3, 22, 500, WHITE_A(on ? 235 : 200), 0, tw, ALIGN_START); }
@@ -467,10 +467,10 @@ static void td_tick(float pw) { float dt = phDt > 0.05f ? 0.05f : phDt;
     if (app_now() - TD.flyAt > 0.3) { TD.on = 0; TD.ox = TD.oy = TD.vx = TD.vy = 0; a_back(0, 0); tween_set(&panA, 0); } } (void)pw; }
 static void panel_draw(void) {
   float a = panA.v; if (a <= 0.01f) return; int kind = panel ? panel : shownKind;
-  td_tick(SB_W * 0.52f > 1200 ? 1200 : SB_W * 0.52f); float pull = TD.on ? td_pull(SB_W * 0.52f > 1200 ? 1200 : SB_W * 0.52f) : 0, fly = TD.on == 3 ? clampf((float)((app_now() - TD.flyAt) / 0.3), 0, 1) : 0;
+  td_tick(fminf(1200.0f, SB_W - 40.0f)); float pull = TD.on ? td_pull(fminf(1200.0f, SB_W - 40.0f)) : 0, fly = TD.on == 3 ? clampf((float)((app_now() - TD.flyAt) / 0.3), 0, 1) : 0;
   float tsc = 1 - 0.16f * pull - 0.22f * fly, trad = 46 * pull; /* smaller as it comes away, rounder */
   gfx_offset_push(TD.ox, TD.oy); gfx_scale_push(tsc, tsc, TD.gx, TD.gy); gfx_opacity_push(1 - 0.25f * pull - 0.75f * fly * fly);
-  float pw = SB_W * 0.52f > 1200 ? 1200 : SB_W * 0.52f, px = SB_W - pw - 20, py = 20, ph = SB_H - 40;
+  float pw = fminf(1200.0f, SB_W - 40.0f), px = 20, py = 20, ph = SB_H - 40;
   /* the glass grows out of the pill that opened it (and shrinks back into it); the contents come in once it has room */
   SbRect o = orgR.w > 0 ? orgR : rect(px + pw / 2 - 100, SB_H - 112, 200, 78); float e = clampf(a, 0, 1);
   float gx = o.x + (px - o.x) * e, gy = o.y + (py - o.y) * e, gw = o.w + (pw - o.w) * e, gh = o.h + (ph - o.h) * e, gr = 39 + (36 - 39) * e;
@@ -539,21 +539,27 @@ static void on_pgn(const ParGuide *g, void *ud) { if ((unsigned)(uintptr_t)ud !=
 static void notice_draw(float osd) {
   extern const char *player_title_id(void); const char *id = player_title_id();
   if (strcmp(id, PGN.id)) { snprintf(PGN.id, sizeof PGN.id, "%s", id); PGN.at = 0; PGN.g.n = 0; PGN.sess++; tween_set(&PGN.a, 0); }
-  static unsigned asked; if (asked != PGN.sess && player_live() && !player_is_trailer() && !strncmp(id, "tt", 2)) { asked = PGN.sess; parental_get(id, on_pgn, (void *)(uintptr_t)PGN.sess); } /* asked as the picture comes */
-  int on = PGN.at > 0 && app_now() - PGN.at < 6.0 && !panel && posA.to < 0.5f; /* (never under the Position or Size bar) */ tween_to(&PGN.a, on ? 1 : 0, on ? 0.5f : 0.55f, EASE_CSS_EASE); tween_tick(&PGN.a, phDt); if (PGN.a.v < 0.004f) return;
-  float t = (float)(app_now() - PGN.at), h = 50, x = 40 + (1 - PGN.a.v) * -14, y = 24 + osd * (96 + 8 + 36 + 22); /* the controls up: under the title's logo and its line, out of their way */ char ag[8]; snprintf(ag, sizeof ag, "%d+", PGN.age);
-  float nw[PG_CATS]; for (int c = 0; c < PG_CATS; c++) nw[c] = text_width(parental_cat_name(c), 21, 600, 0);
-  float bw = text_width(ag, 24, 800, 0) + 22, w = 8 + bw + 14; for (int i = 0; i < PGN.g.n; i++) w += nw[PGN.g.cat[i]] + 8 + 2 * 10 + 7 + (i + 1 < PGN.g.n ? 18 : 16);
-  float fitK = w > SB_W - 80 - (osd > 0.5f ? 0 : 0) ? (SB_W - 80) / w : 1; gfx_scale_push(fitK, fitK, x, y); /* never cut by the screen's edge: smaller when long */
-  gfx_opacity_push(PGN.a.v); gfx_rrect(x, y, w, h, h / 2, RGBA(10, 12, 22, 160)); gfx_ring(x, y, w, h, h / 2, 1.5f, WHITE_A(46));
-  float bx = x + 7, by = y + 7; gfx_rrect(bx, by, bw, h - 14, (h - 14) / 2, col_alpha(ACC | 0xff000000u, 0.45f)); text_draw(ag, bx + bw / 2, by + (h - 14 - text_line_height(24)) / 2, 24, 800, WHITE_A(255), 0, 0, ALIGN_CENTER);
-  float rx = bx + bw + 14, ry = y + (h - text_line_height(21)) / 2, cy = y + h / 2;
-  for (int i = 0; i < PGN.g.n; i++) { float k = clampf((t - 0.25f - i * 0.12f) / 0.35f, 0, 1); k = 1 - (1 - k) * (1 - k); int c = PGN.g.cat[i], lv = PGN.g.lvl[i];
-    if (k > 0.004f) { gfx_opacity_push(k); text_draw(parental_cat_name(c), rx, ry, 21, 600, WHITE_A(225), 0, 0, ALIGN_LEFT);
-      for (int d = 0; d < 3; d++) gfx_circle(rx + nw[c] + 8 + 3.5f + d * 10, cy, 3.5f, d < lv ? (lv == PG_SEVERE ? RGB(0xf0, 0xb9, 0x4a) : WHITE_A(220)) : WHITE_A(55));
-      gfx_opacity_pop(); }
-    rx += nw[c] + 8 + 2 * 10 + 7 + 18; }
-  gfx_opacity_pop(); gfx_scale_pop();
+  static unsigned asked; if (asked != PGN.sess && player_live() && !player_is_trailer() && !strncmp(id, "tt", 2)) { asked = PGN.sess; parental_get(id, on_pgn, (void *)(uintptr_t)PGN.sess); }
+  int reveal = player_paused() || ui_on();
+  int on = PGN.at > 0 && (app_now() - PGN.at < 5.0 || reveal) && !panel && posA.to < 0.5f;
+  tween_to(&PGN.a, on ? 1 : 0, on ? 0.28f : 0.45f, EASE_CSS_EASE); tween_tick(&PGN.a, phDt);
+  if (PGN.a.v < 0.004f || !PGN.g.n) return;
+  float x = SB_W - 34, y = 26 + osd * 126.0f, rowH = 42.0f;
+  gfx_opacity_push(PGN.a.v);
+  char ag[12]; snprintf(ag, sizeof ag, "%d+", PGN.age);
+  float aw = text_width(ag, 22, 800, 0) + 24;
+  gfx_rrect(x - aw, y, aw, 34, 17, col_alpha(ACC | 0xff000000u, 0.58f));
+  text_draw(ag, x - aw / 2, y + 17 - text_line_height(22) / 2.0f, 22, 800, WHITE_A(255), 0, 0, ALIGN_CENTER);
+  y += 44;
+  for (int i = 0; i < PGN.g.n; i++) {
+    int c = PGN.g.cat[i], lv = PGN.g.lvl[i]; const char *label = parental_cat_name(c);
+    float tw = text_width(label, 20, 650, 0), w = tw + 42, yy = y + i * rowH;
+    gfx_rrect(x - w, yy, w, 34, 10, RGBA(10, 12, 22, 178));
+    gfx_rrect(x - 5, yy + 5, 3, 24, 1.5f, lv == PG_SEVERE ? RGB(0xf0, 0xb9, 0x4a) : ACC2);
+    text_draw(label, x - 17, yy + 17 - text_line_height(20) / 2.0f, 20, 650, WHITE_A(235), 0, tw + 4, ALIGN_RIGHT);
+    for (int d = 0; d < 3; d++) gfx_circle(x - w + 12 + d * 9, yy + 17, 2.8f, d < lv ? (lv == PG_SEVERE ? RGB(0xf0, 0xb9, 0x4a) : WHITE_A(220)) : WHITE_A(55));
+  }
+  gfx_opacity_pop();
 }
 /* ---- the frame ---- */
 #define TOPY 74.0f
@@ -566,17 +572,15 @@ static void notice_draw(float osd) {
    episode's name) ---- */
 static char ageFor[96], ageLbl[32]; static unsigned ageSess;
 static void on_age(const Rating *r, void *ud) { if ((unsigned)(uintptr_t)ud != ageSess) return; char b[32]; rating_label(r, b, sizeof b); snprintf(ageLbl, sizeof ageLbl, "%s", r->rating[0] ? b : ""); }
-static void title_draw(float x, float maxW) {
-  extern const char *player_title_type(void); extern const char *player_title_id(void); extern void player_facts(char *out, size_t cap);
+static void title_draw(float x, float maxW, float ty) {
+  extern const char *player_title_type(void); extern const char *player_title_id(void);
   const char *id = player_title_id(); if (strcmp(id, ageFor)) { snprintf(ageFor, sizeof ageFor, "%s", id); ageLbl[0] = 0; ageSess++; if (*id && !player_is_trailer()) rating_get(player_title_type(), id, on_age, (void *)(uintptr_t)ageSess); }
-  float ta; { const LiveCard *c = live_card(); static Tween tA; static int init; if (!init) { init = 1; tween_set(&tA, 1); } tween_to(&tA, c->on && c->tuning && c->it && strcmp(c->it->id, id) ? 0 : 1, 0.22f, EASE_CSS_EASE); tween_tick(&tA, phDt); ta = tA.v; } /* switching channels: the one left fades away, the new one comes in when it plays */
+  float ta; { const LiveCard *c = live_card(); static Tween tA; static int init; if (!init) { init = 1; tween_set(&tA, 1); } tween_to(&tA, c->on && c->tuning && c->it && strcmp(c->it->id, id) ? 0 : 1, 0.22f, EASE_CSS_EASE); tween_tick(&tA, phDt); ta = tA.v; }
   if (ta < 0.01f) return;
-  const char *lg = player_logo(); float lh = 29.15f, lw = 308 < maxW ? 308 : maxW, asp = 0, ty = TOPY - 27.5f; /* the logo, big enough to read at a glance */ GLuint t = lg && *lg ? img_get(lg, (int)lw, (int)lh, &asp) : 0;
-  if (t && asp > 0) { float w = lh * asp, h = lh; if (w > lw) { w = lw; h = w / asp; } gfx_image(t, x, ty + (lh - h) / 2, w, h, 0, WHITE_A((int)(255 * ta)), 0, 0, 1, 1); }
-  else text_draw(player_name(), x, ty + lh / 2 - text_line_height(11) / 2.0f, 11, 800, WHITE_A((int)(250 * ta)), -0.4f, maxW, ALIGN_START);
-  char f[300]; player_facts(f, sizeof f); float fy = ty + lh + 4.4f, fx = x;
-  if (f[0]) { text_draw(f, fx + 0.55f, fy + 1.1f,8, 700, BLACK_A((int)(120 * ta)), 0, maxW - 50, ALIGN_START); text_draw(f, fx, fy,8, 700, WHITE_A((int)(235 * ta)), 0, maxW - 50, ALIGN_START); fx += text_width(f, 8, 700, 0) + 8.8f; } /* (a faint shadow: readable on bright pictures) */
-  if (ageLbl[0] && fx < x + maxW - 33) { float w = text_width(ageLbl, 6, 800, 0) + 9.9f, h = text_line_height(8) + 1.1f; gfx_ring(fx, fy - 0.55f, w, h, 3.85f, 0.8f, WHITE_A((int)(170 * ta))); text_draw(ageLbl, fx + 4.95f, fy + h / 2 - text_line_height(6) / 2.0f - 0.55f,6, 800, WHITE_A((int)(220 * ta)), 0, 0, ALIGN_LEFT); } /* the age: a small outlined badge */
+  text_draw(player_name(), x, ty, 26, 800, WHITE_A((int)(250 * ta)), -0.4f, maxW, ALIGN_END);
+  char f[300]; player_sub_line(f, sizeof f); float fy = ty + 31.0f;
+  if (f[0]) { text_draw(f, x + 0.55f, fy + 1.1f, 19, 700, BLACK_A((int)(120 * ta)), 0, maxW, ALIGN_END); text_draw(f, x, fy, 19, 700, WHITE_A((int)(235 * ta)), 0, maxW, ALIGN_END); }
+  if (ageLbl[0]) { float w = text_width(ageLbl, 16, 800, 0) + 18, h = text_line_height(16) + 8, bx = x + maxW - w; gfx_ring(bx, fy + 22, w, h, 5, 0.8f, WHITE_A((int)(170 * ta))); text_draw(ageLbl, bx + w / 2, fy + 22 + h / 2 - text_line_height(16) / 2.0f, 16, 800, WHITE_A((int)(220 * ta)), 0, 0, ALIGN_CENTER); }
 }
 
 static float barY(void) { return SB_H - 168; } /* (the pills under it at SB_H - 118) */
@@ -625,7 +629,7 @@ void phone_player_draw(void) {
     /* the top: slides up as it goes */
     gfx_offset_push(0, -(1 - a) * 150); gfx_opacity_push(1 - seekK.v);
     gfx_rrect(SB_W / 2 - 36, 14, 72, 8, 4, WHITE_A(130)); /* a handle at the top: a swipe down closes it */
-    hud_circle(38, TOPY, TOPR, "chevron-left", 0, a_back, 0); title_draw(86, SB_W - 680); /* Back is the compact control at the left; swipe-down and system Back remain available. */
+    hud_circle(38, TOPY, TOPR, "chevron-left", 0, a_back, 0); /* Back stays top-left; title and episode move above the seek bar. */
     { int cs = cast_icon_state(); if (cs == 0) gfx_opacity_push(0.5f); hud_circle(TVX, TOPY, TOPR, cs == 3 ? "ph_cast_on" : "ph_cast", 0, a_tv, 0); /* (connected: the TV-connected icon, nothing else) */ if (cs == 0) gfx_opacity_pop();
       if (cs == 2) { float ph = fmodf((float)app_now(), 1.2f) / 1.2f, rr = TOPR * 0.55f + 2.2f + 7.7f * ph; gfx_ring(TVX - rr, TOPY - rr, 2 * rr, 2 * rr, rr, 1.4f, col_alpha(ACC2 | 0xff000000u, 0.7f * (1 - ph))); } } hud_circle(LOCKX, TOPY, TOPR, "lock", 0, a_lock, 0);
     { Item it_; char v_[96]; const Stream *s_; if (player_now(&it_, v_, sizeof v_, &s_) && !strncmp(s_->url, "file:", 5)) { /* playing a download: where the download button would be, a quiet glass capsule saying it plays from the phone (no connection needed); a tap opens Downloads */
@@ -657,16 +661,17 @@ void phone_player_draw(void) {
       gfx_scale_pop();
       float la = btnDir == sd ? clampf((float)(1.1 - (app_now() - btnAt)) / 0.3f, 0, 1) : 0; /* how far, over the button, for a moment */
       if (la > 0) { char t[16]; snprintf(t, sizeof t, "%s%d s", sd < 0 ? "\xe2\x88\x92" : "+", seek_step() * btnJumps); gfx_opacity_push(la); text_draw(t, bx, cy - 35.2f - 29.7f - 5.5f * (1 - clampf(btnA.v * 2, 0, 1)), 18, 800, WHITE_A(250), 0, 0, ALIGN_CENTER); gfx_opacity_pop(); } }
-    { int h0 = nhit; gfx_opacity_push(1 - waitA.v); hud_circle(cx, cy, 47, play ? "p_pause" : "p_play", 0, a_play, 0); gfx_opacity_pop(); if (waitA.v > 0.5f) nhit = h0; } /* a wait takes the play button's place */
+    /* Main playback control is in the bottom-left row; keep the picture centre uncluttered. */
     gfx_scale_pop(); gfx_opacity_pop(); if (midA.v < 0.5f) nhit = midHits; /* hidden: not tappable either */
     /* the bottom: slides down as it goes */
     gfx_offset_push(0, (1 - a) * 190);
     double d = player_dur(), pt = player_time(); if (heldT >= 0 && (fabs(pt - heldT) < 1.5 || app_now() > heldUntil)) heldT = -1;
     double t = G.mode == 4 || G.mode == 1 ? scrubT : heldT >= 0 ? heldT : pt; /* (no jump back while the seek lands) */ float x0 = barX0(), x1 = barX1(), by = barY(), bw = x1 - x0;
+     title_draw(SB_W - 560.0f, 520.0f, by - 92.0f);
     int lv = live_now(); /* a live broadcast: LIVE in red where the time left was, the bar full, no knob */
     char tl[24], tr[24]; fmt(t, tl, sizeof tl); fmt(d > t ? d - t : 0, tr + 1, sizeof tr - 1); tr[0] = '-'; if (d <= 0) snprintf(tr, sizeof tr, "--:--");
     if (lv) { snprintf(tr, sizeof tr, "%s", T("LIVE")); text_draw(tr, x1 + 13.2f, by - text_line_height(8) / 2.0f + 1.1f,8, 800, RGB(0xff, 0x4d, 0x4d), 0.5f, 0, ALIGN_START); }
-    else { text_draw(tl, x0 - 13.2f, by - text_line_height(8) / 2.0f + 1.1f,8, 700, WHITE_A(235), 0, 0, ALIGN_RIGHT); text_draw(tr, x1 + 13.2f, by - text_line_height(14) / 2.0f + 1.1f,14, 700, WHITE_A(200), 0, 0, ALIGN_LEFT); }
+    else { char total[24], stamp[64]; fmt(d, total, sizeof total); snprintf(stamp, sizeof stamp, "%s / %s", tl, total); text_draw(stamp, x1, by + 20, 19, 700, WHITE_A(220), 0, 0, ALIGN_END); }
     float pd = d > 0 ? clampf((float)(t / d), 0, 1) : 0;
     if (lv) { gfx_rrect(x0, by - 2.75f, bw, 5.5f, 2.75f, RGB(0xff, 0x4d, 0x4d)); } else {
     float pb = d > 0 ? (float)(player_buffered() / d) : 0; pb = clampf(pb, 0, 1); float th = G.mode == 4 || G.mode == 1 ? 4.4f : 3.3f;
@@ -683,22 +688,20 @@ void phone_player_draw(void) {
     if (G.mode != 4 && G.mode != 1 && !lv && stripT >= 0 && seekK.v > 0.01f) prev_strip(stripT, stripFrom, stripDelta, seekK.v); /* (let go: the strip fades where it was, not gone at once) */
     int stripped = G.mode == 4 && !lv && prev_strip(t, 0, 0, seekK.v > 0.01f ? 1 : 0); /* (the picture in the middle, its neighbours either side) */
     if (G.mode == 4 && !lv && !stripped) { char bt[24]; fmt(t, bt, sizeof bt); float w = text_width(bt, 34, 800, 0) + 44, bx = clampf(x0 + bw * pd - w / 2, 20, SB_W - 20 - w); pglass(bx, by - 112, w, 64, 32, BLACK_A(100), BLACK_A(190), 0, 0); gfx_ring(bx, by - 112, w, 64, 32, 1.5f, WHITE_A(60)); text_draw(bt, bx + w / 2, by - 80 - text_line_height(34) / 2.0f, 34, 800, WHITE_A(250), 0, 0, ALIGN_CENTER); }
-    /* the pills */
-    gfx_opacity_push(1 - seekK.v);
-    { const char *L[7]; const char *I[7]; int K[7], n = 0; int tr2 = player_is_trailer(); /* the next episode first; each says what it holds: the speed as a number, the subtitles' language */
-      { extern int player_live_channel(void); if (player_live_channel() && live_catalogs() > 0) { L[n] = T("Channels"); I[n] = "wn_live"; K[n++] = 9; } } /* a channel: the others, to switch */
-      if (player_has_next()) { L[n] = NULL; I[n] = "p_next"; K[n++] = 7; }
-      if (player_has_eps()) { L[n] = NULL; I[n] = "p_eps"; K[n++] = 1; }
-      L[n] = NULL; I[n] = "p_cc/p_spk"; K[n++] = 4; /* subtitles and sound: both inside */
-      if (!tr2) { L[n] = NULL; I[n] = "p_src"; K[n++] = 2; }
-      static char sp[16]; snprintf(sp, sizeof sp, "%g\xc3\x97", speed); if (!lv) { L[n] = sp; I[n] = NULL; K[n++] = 6; } /* (a live broadcast: no speed) */
-      { static char an[64]; const char *m = player_aspect(); snprintf(an, sizeof an, "%s", !strcmp(m, "fill") ? T("Fill the screen") : !strcmp(m, "zoom") ? T("Zoom") : T("Original")); tween_to(&aspK, app_now() - aspAt < 1.6 ? 1 : 0, app_now() - aspAt < 1.6 ? 0.3f : 0.35f, EASE_WEB); tween_tick(&aspK, phDt);
-        L[n] = aspK.v > 0.01f ? an : NULL; I[n] = "p_asp"; K[n++] = 8; } /* its name unfolds a moment after a change, then it folds back to its sign */
-      float tot = 0, ws[7]; for (int i = 0; i < n; i++) { ws[i] = L[i] ? text_width(L[i], 8, 700, 0) + (I[i] ? icons_w(I[i]) + 4.4f : 0) + 17.6f : icons_w(I[i]) + 17.6f; if (K[i] == 8 && L[i]) { float w0 = icons_w(I[i]) + 17.6f; ws[i] = w0 + (ws[i] - w0) * aspK.v; } tot += ws[i] + 7.7f; } tot -= 7.7f; /* (the size pill unfolding: the others make room as it does) */
-      float x = SB_W - 22 - tot, y = SB_H - 65; if (x < 30) x = 30; /* pushed right: the stream's specs on the left */
-      /* Technical metadata (resolution, codec, file size, audio label and CC) is omitted from the HUD. */
-      for (int i = 0; i < n; i++) { int lit = (K[i] == panel) || (K[i] == 4 && panel == 3); PFn fn = K[i] == 7 ? a_next : K[i] == 8 ? a_size : a_panel; { if (K[i] == 8) pillLK = aspK.v; float pw_ = pill(x, y, I[i], L[i], lit || (K[i] == 6 && fabsf(speed - 1) > 0.01f) || (K[i] == 8 && strcmp(player_aspect(), "fit")), fn, K[i]); /* lit too: a speed or a size other than the usual */ if (K[i] >= 0 && K[i] < 10) pillR[K[i]] = rect(x, y, pw_, 36); x += pw_ + 7.7f; } } }
-    gfx_opacity_pop();
+    /* Nuvio-style bottom-left controls with comfortable touch targets. */
+     gfx_opacity_push(1 - seekK.v);
+     {
+       float cy = SB_H - 82.0f, r = 27.0f, x = 54.0f, step = 96.0f;
+       hud_circle(x, cy, r, play ? "p_pause" : "p_play", 0, a_play, 0);
+       text_draw(T("Play"), x, cy + 39, 13, 700, WHITE_A(220), 0, 0, ALIGN_CENTER); x += step;
+       hud_circle(x, cy, r, "p_cc/p_spk", panel == 3 || panel == 4, a_panel, 4);
+       text_draw(T("Audio"), x, cy + 39, 13, 650, WHITE_A(220), 0, 0, ALIGN_CENTER); pillR[4] = rect(x-r-8, cy-r-8, 2*r+16, 2*r+16); x += step;
+       if (!player_is_trailer()) { hud_circle(x, cy, r, "p_src", panel == 2, a_panel, 2); text_draw(T("Sources"), x, cy + 39, 13, 650, WHITE_A(220), 0, 0, ALIGN_CENTER); pillR[2] = rect(x-r-8, cy-r-8, 2*r+16, 2*r+16); x += step; }
+       if (!lv) { hud_circle(x, cy, r, "p_ff", panel == 6, a_panel, 6); { char spd[16]; snprintf(spd, sizeof spd, "%g\xc3\x97", speed); text_draw(spd, x, cy + 39, 13, 700, WHITE_A(220), 0, 0, ALIGN_CENTER); } pillR[6] = rect(x-r-8, cy-r-8, 2*r+16, 2*r+16); x += step; }
+       hud_circle(x, cy, r, "p_asp", 0, a_size, 8); text_draw(T("Aspect"), x, cy + 39, 13, 650, WHITE_A(220), 0, 0, ALIGN_CENTER); pillR[8] = rect(x-r-8, cy-r-8, 2*r+16, 2*r+16); x += step;
+       if (player_has_next()) { hud_circle(x, cy, r, "p_next", 0, a_next, 7); text_draw(T("Next"), x, cy + 39, 13, 650, WHITE_A(220), 0, 0, ALIGN_CENTER); pillR[7] = rect(x-r-8, cy-r-8, 2*r+16, 2*r+16); }
+     }
+     gfx_opacity_pop();
     gfx_offset_pop(); gfx_opacity_pop(); }
   if (waitA.v * (1 - seekK.v) > 0.01f) { float cx = SB_W / 2, cy = SB_H / 2 - 20; gfx_opacity_push(waitA.v * (1 - seekK.v)); /* (seeking with previews: the picture has the middle) */ gfx_circle(cx, cy, 47.3f, BLACK_A((int)(115 * fmaxf(a, 0.6f)))); spinner(cx, cy, 28.6f); /* (its disc never thinner than without the controls: no gap as they fade in) */ gfx_opacity_pop(); } /* on its own: with the controls or without */
   { void ph_glass_picture_live(const unsigned char *rgba, int w, int h); int frost = panA.v > 0.01f || dlyA.v > 0.01f; /* the glass: the film copied a quarter size as often as the copies come back, while anything of the player's shows */
@@ -797,10 +800,10 @@ static int can_seek(void) { extern int player_failed(void); return player_live()
 static void seek_here(double t) { if (!can_seek()) return; hold_for_seek(); player_seek_to(t); seekAt = app_now(); heldT = t; heldUntil = app_now() + 5; }
 static void pinch_set(const char *m) { extern void player_set_aspect(const char *m); if (!*m) return; int changed = strcmp(m, player_aspect()) != 0; player_set_aspect(m); { void video_size_mode(const char *mode); video_size_mode(m); }
   if (changed) { toast(!strcmp(m, "fill") ? T("Fill the screen") : !strcmp(m, "zoom") ? T("Zoom") : T("Original"), 900, NULL); pplat_haptic(); } }
-float phone_subs_room(void) { float pw = SB_W * 0.52f > 1200 ? 1200 : SB_W * 0.52f, px = SB_W - pw - 20, k = clampf(panA.v, 0, 1), full = SB_W - 80, free = px - 60; return full + (free - full) * k; } /* the width the subtitles may take: the screen, or the room left of an open tray */
-void phone_subs_ass_fit(float *k, float *ox) { float pw = SB_W * 0.52f > 1200 ? 1200 : SB_W * 0.52f, px = SB_W - pw - 20, t = clampf(panA.v, 0, 1); *k = 1 + ((px - 60) / SB_W - 1) * t; *ox = 40 * t; } /* the tray open: a styled frame shrunk whole into the room left of it (its signs keep their places in it, no line cut) */
-float phone_subs_dx(void) { float pw = SB_W * 0.52f > 1200 ? 1200 : SB_W * 0.52f, px = SB_W - pw - 20, k = clampf(panA.v, 0, 1); return (px / 2 - SB_W / 2) * k; } /* the tray open: the subtitles (and the style's sample) centred in the room left of it, so a style change is seen */
-static int in_panel(float x, float y) { if (panA.v < 0.5f) return 0; float pw = SB_W * 0.52f > 1200 ? 1200 : SB_W * 0.52f; return x >= SB_W - pw - 20 && y >= 20 && y <= SB_H - 20; }
+float phone_subs_room(void) { float pw = fminf(1200.0f, SB_W - 40.0f), right = 20 + pw, k = clampf(panA.v, 0, 1), full = SB_W - 80, free = SB_W - right - 40; return full + (free - full) * k; } /* the width the subtitles may take: the screen, or the room left of an open tray */
+void phone_subs_ass_fit(float *k, float *ox) { float pw = fminf(1200.0f, SB_W - 40.0f), right = 20 + pw, room = SB_W - right - 40, t = clampf(panA.v, 0, 1), center = right + 20 + room / 2; *k = 1 + (room / SB_W - 1) * t; *ox = (center - SB_W / 2) * t; } /* the tray open: a styled frame shrunk whole into the room left of it (its signs keep their places in it, no line cut) */
+float phone_subs_dx(void) { float pw = fminf(1200.0f, SB_W - 40.0f), right = 20 + pw, room = SB_W - right - 40, center = right + 20 + room / 2, k = clampf(panA.v, 0, 1); return (center - SB_W / 2) * k; } /* the tray open: the subtitles (and the style's sample) centred in the room left of it, so a style change is seen */
+static int in_panel(float x, float y) { if (panA.v < 0.5f) return 0; float pw = fminf(1200.0f, SB_W - 40.0f); return x >= 20 && x < 20 + pw && y >= 20 && y <= SB_H - 20; }
 static int on_bar(float x, float y) { return ui_on() && !panel && !live_now() && fabsf(y - barY()) < 54 && x >= barX0() - 40 && x <= barX1() + 40; }
 int phone_player_finger(const SDL_Event *e) {
   float x = e->tfinger.x * SB_W, y = e->tfinger.y * SB_H; double now = e->tfinger.timestamp / 1000.0;
@@ -854,7 +857,7 @@ int phone_player_finger(const SDL_Event *e) {
     if (G.mode == 10) { G.mode = 0; if (now - G.lt > 0.09) cV = 0; float proj = cF + cV * 0.22f; /* where the throw would carry it */
       if (proj > 0.34f && cF > 0.04f) { cMode = 3; pplat_haptic_k(HK_CLICK, 0.6f); } else cMode = 2; return 1; } /* far enough: on its way out; else home on a spring */ /* far enough (or flung): it fades out and closes; else it comes back */ /* all the way (or flung): closed; else it settles back */
     if (G.mode == 8) { G.mode = 0; return 1; }
-    if (G.mode == 11) { G.mode = 0; float pw = SB_W * 0.52f > 1200 ? 1200 : SB_W * 0.52f; if (now - G.lt > 0.08) { TD.vx = TD.vy = 0; } /* (held still before letting go: no throw) */
+    if (G.mode == 11) { G.mode = 0; float pw = fminf(1200.0f, SB_W - 40.0f); if (now - G.lt > 0.08) { TD.vx = TD.vy = 0; } /* (held still before letting go: no throw) */
       float px2 = TD.ox + TD.vx * 0.18f, py2 = TD.oy + TD.vy * 0.18f; /* where the throw would carry it */
       if (px2 > pw * 0.36f || py2 > SB_H * 0.28f) { int kind = panel ? panel : shownKind; TD.on = 2; a_back(0, 0); tween_to(&panA, 0, 0.42f, EASE_WEB); /* far enough: it goes home into its pill, shrinking and rounding as it goes (the controls coming back with it), the pill taking it with a little bounce */
         pillPulseK = kind == 3 ? 4 : kind; pillPulseAt = app_now() + 0.3; pplat_haptic_k(HK_CLICK, 0.6f); }
