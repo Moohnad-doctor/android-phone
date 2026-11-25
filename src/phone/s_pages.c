@@ -224,7 +224,6 @@ static void dli_draw(float a) { const Dl *d = ph_dl_get(dlInfo); if (!d) { ph_sh
   if (!d->info[0]) { y += info_box(PAD, y, cw, NULL, T("No details kept for this download."), F_SMALL, 500, TXT2, 3, 32) + 14; }
   else { const char *p = d->info, *e1 = strchr(p, '\n'); char addon[200], rest[900]; snprintf(addon, sizeof addon, "%.*s", e1 ? (int)(e1 - p) : (int)strlen(p), p); p = e1 ? e1 + 1 : p + strlen(p);
     const char *e2 = strchr(p, '\n'); char name[400]; snprintf(name, sizeof name, "%.*s", e2 ? (int)(e2 - p) : (int)strlen(p), p); p = e2 ? e2 + 1 : p + strlen(p); snprintf(rest, sizeof rest, "%s", p);
-    char *fl = strrchr(rest, '\n'); char file[300] = ""; if (fl && d->file[0] == 0) { snprintf(file, sizeof file, "%s", fl + 1); }
     if (name[0]) y += info_box(PAD, y, cw, addon[0] ? addon : NULL, name, F_BODY, 700, TXT, 6, 36) + 14;
     if (rest[0]) y += info_box(PAD, y, cw, T("DETAILS"), rest, F_SMALL, 500, WHITE_A(210), 30, 32) + 14; }
   if (d->file[0]) { const char *fn = strrchr(d->file, '/'); y += info_box(PAD, y, cw, T("FILE"), fn ? fn + 1 : d->file, F_SMALL, 500, TXT2, 6, 32) + 14; }
