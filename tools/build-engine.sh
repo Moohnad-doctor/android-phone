@@ -95,6 +95,8 @@ fi
 if [[ "$TARGET" == android-* ]]; then
   "$NBIN/llvm-readelf" -h "$OUT" | grep -q "Machine:.*AArch64"
   "$NBIN/llvm-nm" -D --defined-only "$OUT" | grep -Eq '[[:space:]]sbe_get
+test -s "$OUT"
+ls -l "$OUT"
 
 fi
 test -s "$OUT"
