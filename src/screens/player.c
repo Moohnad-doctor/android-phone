@@ -2328,7 +2328,7 @@ void player_cast_track(const char *kind, const char *id, int ms) {
     refresh_tray(3); }
 }
 /* a torrent's peers and speed as the player's corner shows them ("" when none), for a phone's remote */
-const char *player_p2p_line(void) { return P.open && !P.closing && !P.isTrailer && P.isP2p ? P.p2pLine : ""; }
+const char *player_p2p_line(void) { return ""; } /* Peer/speed diagnostics stay out of the playback HUD. */
 /* the info line as the player shows it (resolution, its picture and sound, the size | the sound playing | the subtitles on), for a phone's remote */
 void player_cast_chips(void *arr) { cJSON *a = arr; if (!a || !P.open || P.closing || P.isTrailer) return;
   for (int i = 0; i < P.nchip && i < 8; i++) { cJSON *o = cJSON_CreateObject(); if (P.chip[i].sep) cJSON_AddNumberToObject(o, "sep", 1); else { cJSON_AddStringToObject(o, "t", P.chip[i].t); if (P.chip[i].icon) cJSON_AddStringToObject(o, "i", P.chip[i].icon); if (P.chip[i].bold) cJSON_AddNumberToObject(o, "b", 1); } cJSON_AddItemToArray(a, o); } }
@@ -2442,7 +2442,7 @@ static void info_update(void) {
     if (!kept && same) { int b = P.chip[i].bold; snprintf(P.chip[i].old, sizeof P.chip[i].old, "%s", P.chip[i].t); P.chip[i].oldW = text_width(P.chip[i].old, 24, b ? 800 : 600, b ? 0.5f : 0); P.chip[i].xAt = now; snprintf(P.chip[i].t, sizeof P.chip[i].t, "%s", nw[i].t); }
     else if (!kept) { snprintf(P.chip[i].t, sizeof P.chip[i].t, "%s", nw[i].t); P.chip[i].icon = nw[i].icon; P.chip[i].bold = nw[i].bold; P.chip[i].sep = nw[i].sep; P.chip[i].at = now; P.chip[i].delay = chip_delay(i); P.chip[i].xAt = 0; }
   }
-  P.nchip = n; if (first) chips_in();
+  P.nchip = 0; /* Technical stream badges are intentionally omitted from the player HUD. */ if (first) chips_in();
 }
 /* names and stories of the episodes in the app's language (TMDB), once they are known */
 static void loc_apply(void) {
