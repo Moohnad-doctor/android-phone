@@ -385,7 +385,7 @@ static float main_list(float y) {
       y += head(y, T("Screens")); grp(y, 2);
       nav_row(y, "st_look", TINT_PURPLE, T("Appearance"), T("Accent colour"), P_LOOK); y += RH;
       { const char *cur = store_get("uiLang", "auto"); nav_row(y, "st_lang", TINT_TEAL, T("Language"), !strcmp(cur, "auto") ? T("Auto") : i18n_lang_name(cur), P_LANG); } y = grp_end();
-      int sup = welcome_support_url()[0] != 0, gh = welcome_github_url()[0] != 0; y += head(y, T("Account and system")); grp(y, 3);
+      y += head(y, T("Account and system")); grp(y, 3);
       { char n[16]; snprintf(n, sizeof n, "%d", sb_addon_on_count()); nav_row(y, "st_addon", TINT_PINK, T("Addons"), T1("{n} on", "n", n), P_ADDONS); y += RH; }
       { int ts = scrobble_state(); nav_row(y, "trakt", RGB(0x64, 0x38, 0xd0), "Trakt", ts == TRAKT_LINKED ? (scrobble_user()[0] ? scrobble_user() : T("Connected")) : NULL, P_TRAKT); y += RH; }
       { const char *av = update_avail(); nav_row(y, "st_about", av ? TINT_GREEN : TINT_GREY, T("About"), av ? T1("Version {v} is available", "v", av) : T("Version and updates"), P_ABOUT); if (av) gfx_circle(gx + gw - 26 - 32 - 22, y + RH / 2, 8, RGB(0x34, 0xc7, 0x59)); } /* (a newer version out: its green dot, beside the row that installs it) */
