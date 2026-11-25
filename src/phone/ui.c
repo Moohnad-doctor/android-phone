@@ -54,7 +54,7 @@ void card_at(const Item *it, float x, float y, float w, float h, int wide, int l
      Keep the card URL at TMDB w500; card_draw_prep uses this resolved URL unchanged. */
   if (!wide) {
     char *low = strstr(prep.art, "/t/p/w342/");
-    if (low) { memcpy(low + 6, "w500", 4); snprintf(prep.pre, sizeof prep.pre, "%s", prep.art); }
+    if (low) { memcpy(low + 5, "w500", 4); snprintf(prep.pre, sizeof prep.pre, "%s", prep.art); }
   }
   card_draw_prep(&displayItem, &prep, x, y, w, h, wide, label, 1);
   lift_end(key, x, y, w, h, r);
