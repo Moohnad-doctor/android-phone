@@ -309,7 +309,7 @@ static void toast_draw(void) {
     ph_liquid_bubble(x, y, w, h, rr, 0); gfx_rrect(x, y, w, h, rr, RGBA(14, 12, 20, 110)); } /* (a touch darker: its words read over anything) */
 #else
   gfx_shadow(x, y + 16, w, h, rr, 40, BLACK_A(115));
-  gfx_rrect(x, y, w, h, rr, RGB(0x1f, 0x1c, 0x28)); gfx_rrect_v(x, y, w, h, rr, WHITE_A(16), WHITE_A(0)); gfx_ring(x, y, w, h, rr, 1, WHITE_A(22));
+  gfx_rrect(x, y, w, h, rr, RGB(0x05, 0x05, 0x06)); gfx_rrect_v(x, y, w, h, rr, WHITE_A(16), WHITE_A(0)); gfx_ring(x, y, w, h, rr, 1, WHITE_A(22));
 #endif
   float cx = rtl ? x + w - 28 : x + 28; /* the pen: left to right, or right to left */
   if (toastKind) { float ix = rtl ? cx + 6 - 26 : cx - 6, iy = y + h / 2 - 13;
