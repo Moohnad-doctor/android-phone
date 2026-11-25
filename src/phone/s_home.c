@@ -198,13 +198,7 @@ static void hero_act(int a, int b2) { (void)b2; Board *b = me(); const Item *it 
   if (a == 1) { if (!strcmp(it->type, "series")) { DetailParams p; memset(&p, 0, sizeof p); p.it = *it; p.openStreams = 1; app_go(SCR_DETAIL, &p, 0); } else ph_streams_show(it, it->id, NULL); }
   else if (a == 2) { lib_toggle(it); toast(lib_has(it->id) ? T("Added to Library") : T("Removed from Library"), 1600, NULL); app_refresh_boards(); }
   else { b->fr = -3; b->fi = 0; app_open_item(it); } }
-static void filter_act(int a, int b2) { (void)b2; Board *b = me(); int nf = b->filter == a ? 0 : a; b->swDir = nf > b->filter ? 1 : -1; b->filter = nf; timer_start(&b->sw, 0.34f); } /* the rows slide in from the chip's side */
-static void cat_pick(int i) { Board *b = me(); if (i >= 0 && i < b->n) { scroll_to(&b->v, b->lastY[i + 2]); } /* (it glides there; the end of the page is as far as it goes) */ }
-static void cats_act(int a, int b2);
-static int fAll; /* (Series or Movies chosen: an "All" chip first, back to everything) */
-static void filter_set(int i, int b2) { (void)b2; Board *b = me(); int nf = fAll ? i : i + 1; if (nf == b->filter) return; b->swDir = nf > b->filter ? 1 : -1; b->filter = nf; timer_start(&b->sw, 0.34f); }
-static void ctx_act(int i, int b2) { if (fAll) { if (i == 0) { filter_set(0, b2); return; } i--; } if (i == 2) cats_act(0, 0); else filter_act(i + 1, b2); }
-static void cats_act(int a, int b2) { (void)a; (void)b2; Board *b = me(); const char *names[14]; static char buf[14][96]; int n = 0; for (int i = 0; i < b->n && n < 14; i++) { snprintf(buf[n], sizeof buf[n], "%s", T(b->rows[i].def.title)); names[n] = buf[n]; n++; } choices_open(T("Categories"), names, n, -1, cat_pick); }
+/* Home's former context-chip handlers were removed with the redundant Series / Movies / Categories pills. */
 
 static void enter(const void *params) { (void)params; Board *b = me(); bg_clear(); if (!b->n || b->lib != lib_version()) load(b, 0); else lib_rows(b); { extern int app_entered_by_swipe; if (app_entered_by_swipe) b->in.on = 0; else timer_start(&b->in, 0.4f); } } /* swiped back to: already in place */
 static void leave(void) {}
