@@ -131,7 +131,7 @@ jobs:
         run: |
           set -euo pipefail
           tools/phone/apk.sh debug
-          VERSION="$(sed -n "s/.*versionName '\\([^']*\\)'.*/\\1/p" android-phone/app/build.gradle | head -1)"
+          VERSION="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" android-phone/app/build.gradle | head -1)"
           test -n "$VERSION"
           APK_PATH="dist/stremio-origin-phone-$VERSION-arm64-v8a-debug.apk"
           test -s "$APK_PATH"
