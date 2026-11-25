@@ -134,10 +134,30 @@ static void on_sug(ItemList *l, char names[6][128], int nn, void *ud) {
   S.nsug = 0; for (int i = 0; i < nn && S.nsug < 6; i++) { int dup = 0; for (int k = 0; k < S.nsug; k++) if (!strcasecmp(S.sug[k], names[i])) dup = 1; if (!dup && names[i][0]) snprintf(S.sug[S.nsug++], 128, "%s", names[i]); }
   S.topDone = 1; if (!S.firstAt) S.firstAt = app_now(); merge();
 }
-/* a catalog's answer: the query's token above, the catalog's place in the low 5 bits */
-static void on_cat(ItemList *l, int cached, void *ud) { (void)cached; uintptr_t t = (uintptr_t)ud; int c = (int)(t & 31);
-  if ((unsigned)(t >> 5) != (S.tok & 0x7ffffff) || c >= S.ncat) { itemlist_free(l); return; } itemlist_clear(&S.cat[c]); S.catFail[c] = l->total < 0; if (!S.catFail[c]) { int k = 0; for (int i = 0; i < l->n; i++) if (!notice_item(&l->items[i])) k++; else fprintf(stderr, "[search] catalog %d sent a notice, left out: %s (%s)\n", c, l->items[i].name, l->items[i].id); S.catFail[c] = l->n > 0 && !k; } /* only notices: failed too */
-  S.cat[c] = *l; free(l); S.catDone[c] = 1; if (!S.firstAt) S.firstAt = app_now(); merge(); }
+/* a catalog's answer: six low bits hold its place, the rest identify this query */
+static void on_cat(ItemList *l, int cached, void *ud) {
+  (void)cached;
+  uintptr_t t = (uintptr_t)ud;
+  int c = (int)(t & 63);
+  if ((unsigned)(t >> 6) != (S.tok & 0x3ffffff) || c >= S.ncat) { if (l) itemlist_free(l); return; }
+  itemlist_clear(&S.cat[c]);
+  S.catFail[c] = !l || l->total < 0;
+  if (l) {
+    if (!S.catFail[c]) {
+      int k = 0;
+      for (int i = 0; i < l->n; i++) {
+        if (!notice_item(&l->items[i])) k++;
+        else fprintf(stderr, "[search] catalog %d sent a notice, left out: %s (%s)\\n", c, l->items[i].name, l->items[i].id);
+      }
+      S.catFail[c] = l->n > 0 && !k;
+    }
+    S.cat[c] = *l;
+    free(l);
+  }
+  S.catDone[c] = 1;
+  if (!S.firstAt) S.firstAt = app_now();
+  merge();
+}
 static void urlenc(const char *s, char *out, size_t cap) { size_t o = 0; for (; *s && o + 4 < cap; s++) { unsigned char c = *s; if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.') out[o++] = c; else o += snprintf(out + o, cap - o, "%%%02X", c); } out[o] = 0; }
 static void live(void) {
   char q[48]; snprintf(q, sizeof q, "%s", S.q); char *e = q + strlen(q); while (e > q && e[-1] == ' ') *--e = 0; const char *p = q; while (*p == ' ') p++;
