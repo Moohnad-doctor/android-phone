@@ -343,7 +343,7 @@ static const int hc_year_values[] = { 0, 2026, 2025, 2024, 2020, 1 };
 static const char *hc_sorts[] = { "Most popular", "Now playing", "Newest airing", "Highest rated" };
 static int hc_choice;
 static int hc_count(int menu) { return menu == 0 ? 9 : menu == 1 ? 6 : 4; }
-static const char *hc_label(int menu, int i) { return menu == 0 ? T(hc_genres[i]) : menu == 1 ? hc_years[i] : T(hc_sorts[i]); }
+static const char *hc_label(int menu, int i) { return menu == 0 ? T(hc_genres[i]) : menu == 1 ? T(hc_years[i]) : T(hc_sorts[i]); }
 static void hc_filter_act(int menu, int b) { (void)b; HC.menu = HC.menu == menu ? -1 : menu; hc_choice = -1; }
 static void hc_option_act(int i, int b) {
   (void)b;
