@@ -106,17 +106,21 @@ static void slide_row(Row *r) {
   if (r->popCol != r->col) { r->popCol = r->col; focus_pop(&r->pop); } /* the floating copy pops on every move */
 }
 /* ---- Discover's filters: a type, a genre, a decade (the rows asked again with them; the decade sorts the answers) ---- */
-static struct { char type[16], genre[48]; int cat, decade; /* the type, which of its catalogs, its genre (as the official Discover); decade: 0 (unused now) */
-  int open, which, idx, n, top; float listW, roomMax, ow[200], ox[200], rx0, rroom, rfull, hx, hw, sxd; Tween wt[3]; double restAt; Tween sx; int hFrom, hTo; Tween hk, ha; char opt[200][96]; Tween a; float cx[4], cw[4], y; int nchip; } FL;
+static struct { char type[16], genre[48]; int cat, decade, sort; /* the type, which of its catalogs, its genre (as the official Discover); decade: 0 (unused now) */
+  int open, which, idx, n, top; float listW, roomMax, ow[200], ox[200], rx0, rroom, rfull, hx, hw, sxd; Tween wt[5]; double restAt; Tween sx; int hFrom, hTo; Tween hk, ha; char opt[200][96]; Tween a; float cx[5], cw[5], y; int nchip; } FL;
 static int item_year(const Item *it) { for (const char *p = it->metaLine; *p; p++) if (p[0] >= '1' && p[0] <= '2' && p[1] >= '0' && p[1] <= '9' && p[2] >= '0' && p[2] <= '9' && p[3] >= '0' && p[3] <= '9') { int y = atoi(p); if (y >= 1890 && y <= 2100) return y; } return 0; }
-static int year_ok(const Item *it) { if (!FL.decade) return 1; int y = item_year(it); if (!y) return 0; return FL.decade == 1 ? y < 1980 : y >= FL.decade && y < FL.decade + 10; }
+static int year_ok(const Item *it) { if (!FL.decade) return 1; int y = item_year(it); if (!y) return 0; if (FL.decade == 1) return y < 1980; if (FL.decade == 2020) return y >= 2020 && y <= 2023; return y == FL.decade; }
 static void year_keep(ItemList *l) { if (!FL.decade || !l) return; int k = 0; for (int i = 0; i < l->n; i++) if (year_ok(&l->items[i])) l->items[k++] = l->items[i]; l->n = k; }
+static double item_rating(const Item *it) { const cJSON *m = sb_meta_cached(it->type, it->id); return js_num(m, "imdbRating", js_num(m, "rating", 0)); }
+static int sort_mode;
+static int item_cmp(const void *aa, const void *bb) { const Item *a = aa, *b = bb; double x = sort_mode == 1 ? a->airAt : sort_mode == 2 ? item_year(a) : item_rating(a), y = sort_mode == 1 ? b->airAt : sort_mode == 2 ? item_year(b) : item_rating(b); return x < y ? 1 : x > y ? -1 : 0; }
+static void sort_items(ItemList *l) { if (!l || l->n < 2 || FL.sort < 1 || FL.sort > 3) return; sort_mode = FL.sort; qsort(l->items, (size_t)l->n, sizeof(Item), item_cmp); }
 /* a catalog answer finds its row through a packed token (board, row, generation): nothing to free */
 static void *tok(Board *b, int row) { return (void *)(uintptr_t)(((uintptr_t)(b - boards) << 31) | ((uintptr_t)(b->gen & 0xffffff) << 7) | (uintptr_t)row); }
 static void on_catalog(ItemList *l, int cached, void *ud) {
   (void)cached; uintptr_t t = (uintptr_t)ud; Board *b = &boards[(t >> 31) & 1]; int row = t & 127; unsigned gen = (t >> 7) & 0xffffff;
   if ((b->gen & 0xffffff) != gen || row >= b->n) { itemlist_free(l); return; }
-  int got = l->n; if (b->kind == 1) year_keep(l); /* (Discover's decade) */
+  int got = l->n; if (b->kind == 1) { year_keep(l); sort_items(l); } /* (Discover's decade) */
   { Row *r0 = &b->rows[row]; if (!got && l->total < 0 && r0->hasDef && r0->retries < 3) { static const double W[3] = { 8, 20, 45 }; r0->retryAt = app_now() + W[r0->retries]; r0->retries++; itemlist_free(l); /* no answer (an addon still making the list, busy, a blip): asked again in 8, 20 and 45 s before the row is left out */
       fprintf(stderr, "[home] %s: no answer, asked again in %.0f s\n", r0->title, W[r0->retries - 1]); return; } }
   Row *r = &b->rows[row]; row_clear(r); r->items = *l; free(l); r->locAt = 0;
@@ -610,6 +614,7 @@ static void board_leave(void) {
 }
 static void enter_home(const void *p) { (void)p; board_leave(); board_enter_k(&boards[0]); }
 static void enter_disc(const void *p) { (void)p; board_leave(); board_enter_k(&boards[1]); }
+void board_open_category(const char *type, const char *genre) { snprintf(FL.type, sizeof FL.type, "%s", type && *type ? type : "movie"); snprintf(FL.genre, sizeof FL.genre, "%s", genre ? genre : ""); FL.cat = 0; FL.decade = 0; FL.sort = 0; FL.open = 0; boards[1].built = 0; app_go(SCR_DISC, NULL, 0); }
 /* the next page when the focus is a few cards from the row's end (the official apps load a catalog's pages the same
    way, with skip); a page that brings nothing new, a 404 or hasMore false ends it; a failed one is asked again later */
 static void on_page(ItemList *l, int more, void *ud) {
