@@ -351,7 +351,7 @@ static float dl_card(int i, float y, float ink) {
           }
           const char *w2 = watchLabel[0] ? watchLabel : ph_dl_wait_word(o) ? ph_dl_wait_word(o) : st_word(o->state); float tw2 = text_draw(w2, ex0, ry + 50, F_TINY, 700, o->state == DL_NOSTREAM || o->state == DL_FAILED ? RGB(0xef, 0x8f, 0x8a) : o->state == DL_RUNNING ? ACC2 : TXT3, 0, rw * 0.5f, ALIGN_START);
           if (E->size > 0) { text_draw("\xc2\xb7", ex0 + tw2 + 10, ry + 50, F_TINY, 700, TXT3, 0, 0, ALIGN_START); prog_line(E, o, ex0 + tw2 + 24, ry + 50, rx + rw - 160 - (ex0 + tw2 + 24), o->state, 1); } }
- ? text_width(rowEta, F_TINY, 600, 0) + 16 : 0, right = rx + rw - 164; /* its name, and across from it its time left (clear of its ring) */
+        { float ew = rowEta[0] ? text_width(rowEta, F_TINY, 600, 0) + 16 : 0, right = rx + rw - 164; /* its name, and across from it its time left (clear of its ring) */
           if (rowEta[0]) text_draw(rowEta, right, ry + 14 + (text_line_height(F_SMALL + 1) - text_line_height(F_TINY)) / 2.0f, F_TINY, 600, TXT3, 0, 0, ALIGN_END);
           text_draw(cg ? o->name : o->ep, ex0, ry + 14, F_SMALL + 1, 700, TXT, 0, right - ew - ex0 - 8, ALIGN_START); } /* (a collection's row: its film's name) */
         /* its ring: fills as it comes; paused, the pause sign comes into it */
