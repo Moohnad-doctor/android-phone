@@ -53,8 +53,16 @@ void card_at(const Item *it, float x, float y, float w, float h, int wide, int l
   /* sb_poster_of's legacy w342 downgrade softens phone-sized catalog posters.
      Keep the card URL at TMDB w500; card_draw_prep uses this resolved URL unchanged. */
   if (!wide) {
-    char *low = strstr(prep.art, "/t/p/w342/");
-    if (low) { memcpy(low + 5, "w500", 4); snprintf(prep.pre, sizeof prep.pre, "%s", prep.art); }
+    char *tmdb = strstr(prep.art, "/t/p/");
+    if (tmdb) {
+      char *size = tmdb + 5, *slash = strchr(size, '/');
+      if (slash && strncmp(size, "original", 8)) {
+        char high[sizeof prep.art];
+        snprintf(high, sizeof high, "%.*s/w500/%s", (int)(size - prep.art), prep.art, slash + 1);
+        snprintf(prep.art, sizeof prep.art, "%s", high);
+      }
+    }
+    snprintf(prep.pre, sizeof prep.pre, "%s", prep.art);
   }
   card_draw_prep(&displayItem, &prep, x, y, w, h, wide, label, 1);
   lift_end(key, x, y, w, h, r);
