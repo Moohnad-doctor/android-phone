@@ -427,12 +427,24 @@ void sb_catalog_page(const CatalogDef *d, int skip, void (*cb)(ItemList *, int, 
 }
 /* every catalog that takes a search (and needs nothing else), in addon order */
 int sb_search_defs(const char *q, CatalogDef *out, int max) {
-  int n = 0; cJSON *a = sb_addons(); const cJSON *ad; if (!a) return 0; static const char *const SN[1] = { "search" };
-  cJSON_ArrayForEach(ad, a) { if (!sb_addon_on(ad)) continue; const cJSON *cats = js_arr(js_obj(ad, "manifest"), "catalogs"), *cat; char base[512]; addon_base(ad, base, sizeof base);
+  int n = 0; cJSON *a = sb_addons(); const cJSON *ad; static const char *const SN[1] = { "search" };
+  /* Cinemeta is always queried alongside installed search catalogs. */
+  if (max <= 0) return 0;
+  char path[640], ex[480] = "";
+  snprintf(path, sizeof path, CINEMETA "/catalog/movie/top");
+  addon_extra_add(ex, sizeof ex, "search", q ? q : "");
+  def_set(&out[n++], "Cinemeta · Movies", "movie", path, ex, 0, "cin_search_movie");
+  if (n < max) {
+    snprintf(path, sizeof path, CINEMETA "/catalog/series/top");
+    def_set(&out[n++], "Cinemeta · Series", "series", path, ex, 0, "cin_search_series");
+  }
+  if (!a) return n;
+  cJSON_ArrayForEach(ad, a) { if (!sb_addon_on(ad) || n >= max) continue; const cJSON *cats = js_arr(js_obj(ad, "manifest"), "catalogs"), *cat; char base[512]; addon_base(ad, base, sizeof base);
+    if (!strcmp(base, CINEMETA)) continue;
     if (cats) cJSON_ArrayForEach(cat, cats) { const char *ctype = js_str(cat, "type", NULL), *cid = js_str(cat, "id", NULL);
       if (!ctype || !cid || !addon_cat_accepts(cat, SN, 1) || n >= max) continue;
-      char path[512], te[96], ie[300], ex[300] = ""; addon_urlenc(ctype, te, sizeof te); addon_urlenc(cid, ie, sizeof ie); snprintf(path, sizeof path, "%s/catalog/%s/%s", base, te, ie);
-      addon_extra_add(ex, sizeof ex, "search", q); def_set(&out[n++], js_str(cat, "name", ""), ctype, path, ex, 0, ""); } }
+      char catPath[512], te[96], ie[300], catEx[300] = ""; addon_urlenc(ctype, te, sizeof te); addon_urlenc(cid, ie, sizeof ie); snprintf(catPath, sizeof catPath, "%s/catalog/%s/%s", base, te, ie);
+      addon_extra_add(catEx, sizeof catEx, "search", q ? q : ""); def_set(&out[n++], js_str(cat, "name", ""), ctype, catPath, catEx, 0, ""); } }
   return n;
 }
 
