@@ -13,6 +13,7 @@ if (hasKeys) {
 android {
     namespace 'app.stremioorigin.phone'
     compileSdk 36
+    ndkVersion '27.2.12479018'
 
     defaultConfig {
         applicationId 'app.stremioorigin.phone'
