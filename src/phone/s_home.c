@@ -312,7 +312,7 @@ static void hc_page_got(ItemList *l, int more, void *ud) {
   if ((unsigned)(uintptr_t)ud != HC.gen) { if (l) itemlist_free(l); return; }
   HC.pageBusy = 0;
   if (!l) { HC.pageRetryAt = app_now() + 2.0; return; }
-  int got = l->n;
+  int got = l->n, added = 0;
   if (got > 0) {
     Item *items = realloc(HC.all.items, (size_t)(HC.all.n + got) * sizeof(Item));
     if (items) {
@@ -321,12 +321,13 @@ static void hc_page_got(ItemList *l, int more, void *ud) {
         int dup = 0;
         for (int j = 0; j < HC.all.n && !dup; j++)
           dup = !strcmp(HC.all.items[j].type, l->items[i].type) && !strcmp(HC.all.items[j].id, l->items[i].id);
-        if (!dup) HC.all.items[HC.all.n++] = l->items[i];
+        if (!dup) { HC.all.items[HC.all.n++] = l->items[i]; added++; }
       }
     }
   }
   HC.skip += got;
-  HC.more = more < 0 ? got >= 200 : more != 0;
+  /* When an addon omits hasMore, keep paging while it returns new items; stop on empty or repeated pages. */
+  HC.more = more < 0 ? (got > 0 && added > 0) : more != 0;
   if (!got) HC.more = 0;
   HC.pageRetryAt = 0;
   itemlist_free(l); hc_apply();
