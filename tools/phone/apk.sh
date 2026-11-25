@@ -18,14 +18,19 @@ TOOLS="$HOME/stremiobrew-build/android"
 KEYS="$TOOLS/keys"
 PROPS="$KEYS/phone.properties"
 
-export ANDROID_HOME="$TOOLS/sdk"
+# Prefer the runner's preinstalled SDK; retain the historical local-build fallback.
+export ANDROID_HOME="${ANDROID_HOME:-$TOOLS/sdk}"
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
+NDK="${NDK:-${ANDROID_NDK_ROOT:-$ANDROID_HOME/ndk/27.2.12479018}}"
+export NDK ANDROID_NDK_HOME="$NDK" ANDROID_NDK_ROOT="$NDK"
 GRADLE="$TOOLS/gradle-8.11.1/bin/gradle"
 
 [ -d "$ANDROID_HOME" ] || { echo "error: Android SDK not found at $ANDROID_HOME" >&2; exit 1; }
+[ -d "$NDK" ] || { echo "error: Android NDK not found at $NDK" >&2; exit 1; }
+[ -x "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" ] || { echo "error: Linux Android NDK toolchain not found under $NDK" >&2; exit 1; }
 [ -x "$GRADLE" ] || { echo "error: Gradle not found at $GRADLE" >&2; exit 1; }
 
-# Gradle 8.11 / AGP 8.7 do not run on JDK 24+; pick a JDK 17-23 by real version.
+# Gradle 8.11 / AGP 8.7 require a supported JDK; CI pins Temurin 17.
 jdk_major() {
   "$1/bin/java" -version 2>&1 | sed -n 's/.*version "\([0-9]*\).*/\1/p' | head -1
 }
@@ -41,16 +46,18 @@ for c in \
   major="$(jdk_major "$c")"
   if [ "$major" -ge 17 ] && [ "$major" -le 23 ]; then JDK="$c"; break; fi
 done
-[ -n "$JDK" ] || { echo "error: no JDK 17-23 found (install or set JAVA_HOME)" >&2; exit 1; }
+[ -n "$JDK" ] || { echo "error: no supported JDK found (install or set JAVA_HOME)" >&2; exit 1; }
 export JAVA_HOME="$JDK"
 echo "JDK: $JAVA_HOME"
 
-# Local SDK location for Gradle (never committed).
-printf 'sdk.dir=%s\n' "$ANDROID_HOME" > "$PHONE/local.properties"
+# Local SDK/NDK locations for Gradle (generated per runner; never committed).
+printf 'sdk.dir=%s\nndk.dir=%s\n' "$ANDROID_HOME" "$NDK" > "$PHONE/local.properties"
 
 # Native libraries: one set per ABI, extracted by Gradle (useLegacyPackaging).
 JNI="$PHONE/app/src/main/jniLibs"
-for ABI in ${TARGET_ABIS:-arm64-v8a armeabi-v7a}; do
+ABI_LIST="${TARGET_ABIS:-arm64-v8a,armeabi-v7a}"
+IFS=',' read -r -a ABIS <<< "$ABI_LIST"
+for ABI in "${ABIS[@]}"; do
   mkdir -p "$JNI/$ABI"
   rm -f "$JNI/$ABI"/*.so
   B="$ROOT/build/phone-$ABI"
@@ -73,7 +80,7 @@ done
 if [ "$MODE" = release ] && [ ! -f "$PROPS" ]; then
   mkdir -p "$KEYS"
   STORE="$KEYS/phone.jks"
-  PASS="$(openssl rand -hex 12)"   # 24 characters
+  PASS="$(openssl rand -hex 12)"
   "$JDK/bin/keytool" -genkeypair -keystore "$STORE" -storepass "$PASS" -keypass "$PASS" \
     -alias phone -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Stremio Origin"
   ( umask 077
@@ -83,21 +90,37 @@ if [ "$MODE" = release ] && [ ! -f "$PROPS" ]; then
   echo "created keystore: $STORE"
 fi
 
-"$GRADLE" -p "$PHONE" "$TASK" -PtargetAbis="${TARGET_ABIS:-arm64-v8a,armeabi-v7a}" --console=plain
+"$GRADLE" -p "$PHONE" "$TASK" -PtargetAbis="$ABI_LIST" --console=plain
 
 VERSION="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" "$PHONE/app/build.gradle" | head -1)"
 OUTDIR="$PHONE/app/build/outputs/apk/$MODE"
-# one APK per processor (libVLC is large): 64-bit phones take arm64-v8a, older ones armeabi-v7a
-GITREV=$(git -C "$ROOT" rev-parse --short=10 HEAD 2>/dev/null || echo unknown)$(git -C "$ROOT" diff --quiet HEAD -- src 2>/dev/null || echo "+$(git -C "$ROOT" diff HEAD -- src | shasum | cut -c1-6)")   # (uncommitted changes: their own fingerprint, so each test build keeps its own debug copy)
-for ABI in ${TARGET_ABIS:-arm64-v8a armeabi-v7a}; do D="$ROOT/dist/dbg/$GITREV/$ABI"; mkdir -p "$D"; for f in libmain.dbg.so libsbengine.dbg.so; do [ -f "$ROOT/build/phone-$ABI/$f" ] && cp "$ROOT/build/phone-$ABI/$f" "$D/"; done; done   # (a crash report's addresses, named with these: llvm-addr2line -fCe)
-[ "$MODE" = release ] && { R="$ROOT/dist/dbg/release-$VERSION-$GITREV"; mkdir -p "$R"; cp -R "$ROOT/dist/dbg/$GITREV/." "$R/"; }   # (a release's debug files kept apart, never pruned: a user's crash report names its code from them)
-ls -dt "$ROOT"/dist/dbg/*/ 2>/dev/null | grep -v '/release-' | tail -n +6 | while read -r d; do rm -rf "${d:?}"; done   # (the newest 5 test builds' debug files kept: each is ~185 MB, and they filled the disk twice)
-SUF="-$MODE"; [ "$MODE" = release ] && SUF=""   # (a release: the very name the app's updater looks for in the releases, stremio-origin-phone-<x.y.z>-<abi>.apk)
-mkdir -p "$ROOT/dist"; if [ -z "$SUF" ]; then rm -f "$ROOT/dist/stremio-origin-phone-"*"-arm64-v8a.apk" "$ROOT/dist/stremio-origin-phone-"*"-armeabi-v7a.apk"; else rm -f "$ROOT/dist/stremio-origin-phone-"*"$SUF.apk"; fi; n=0
-for ABI in ${TARGET_ABIS:-arm64-v8a armeabi-v7a}; do
-  for f in "$OUTDIR/app-$ABI-$MODE.apk" "$OUTDIR/app-$ABI-$MODE-unsigned.apk"; do
-    [ -f "$f" ] || continue; DEST="$ROOT/dist/stremio-origin-phone-$VERSION-$ABI$SUF.apk"; cp "$f" "$DEST"; n=$((n + 1))
-    echo "APK: $DEST ($(ls -lh "$DEST" | awk '{print $5}'))"; break
+# one APK per processor: 64-bit phones take arm64-v8a, older ones armeabi-v7a
+GITREV=$(git -C "$ROOT" rev-parse --short=10 HEAD 2>/dev/null || echo unknown)$(git -C "$ROOT" diff --quiet HEAD -- src 2>/dev/null || echo "+$(git -C "$ROOT" diff HEAD -- src | shasum | cut -c1-6)")
+for ABI in "${ABIS[@]}"; do
+  D="$ROOT/dist/dbg/$GITREV/$ABI"
+  mkdir -p "$D"
+  for f in libmain.dbg.so libsbengine.dbg.so; do
+    [ -f "$ROOT/build/phone-$ABI/$f" ] && cp "$ROOT/build/phone-$ABI/$f" "$D/"
   done
 done
-[ $n -gt 0 ] || { echo "error: no APK found in $OUTDIR" >&2; exit 1; }
+[ "$MODE" = release ] && { R="$ROOT/dist/dbg/release-$VERSION-$GITREV"; mkdir -p "$R"; cp -R "$ROOT/dist/dbg/$GITREV/." "$R/"; }
+ls -dt "$ROOT"/dist/dbg/*/ 2>/dev/null | grep -v '/release-' | tail -n +6 | while read -r d; do rm -rf "${d:?}"; done
+SUF="-$MODE"; [ "$MODE" = release ] && SUF=""
+mkdir -p "$ROOT/dist"
+if [ -z "$SUF" ]; then
+  rm -f "$ROOT/dist/stremio-origin-phone-"*"-arm64-v8a.apk" "$ROOT/dist/stremio-origin-phone-"*"-armeabi-v7a.apk"
+else
+  rm -f "$ROOT/dist/stremio-origin-phone-"*"$SUF.apk"
+fi
+n=0
+for ABI in "${ABIS[@]}"; do
+  for f in "$OUTDIR/app-$ABI-$MODE.apk" "$OUTDIR/app-$ABI-$MODE-unsigned.apk"; do
+    [ -f "$f" ] || continue
+    DEST="$ROOT/dist/stremio-origin-phone-$VERSION-$ABI$SUF.apk"
+    cp "$f" "$DEST"
+    n=$((n + 1))
+    echo "APK: $DEST ($(ls -lh "$DEST" | awk '{print $5}'))"
+    break
+  done
+done
+[ "$n" -gt 0 ] || { echo "error: no APK found in $OUTDIR" >&2; exit 1; }

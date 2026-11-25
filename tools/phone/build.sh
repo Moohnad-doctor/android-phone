@@ -8,7 +8,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; TP="$ROOT/third_party"
 T="${1:-mac}"; B="$ROOT/build/phone-$T"; mkdir -p "$B/tp/ass" "$B/obj"
-PRIV="$HOME/stremiobrew-build"; NDK="${NDK:-$PRIV/android/sdk/ndk/27.2.12479018}"; API="${API:-24}"
+PRIV="$HOME/stremiobrew-build"; NDK="${NDK:-${ANDROID_NDK_ROOT:-$PRIV/android/sdk/ndk/27.2.12479018}}"; API="${API:-24}"
 OPT="-O2 -gline-tables-only -fno-strict-aliasing -ffunction-sections -fdata-sections -ffile-prefix-map=$ROOT=/app"   # (line tables: a crash or a freeze named to the file and line, from the kept unstripped copy; the shipped library is stripped)
 case "$T" in
   mac) MACSDL="${MACSDL:-$PRIV/mac/sdl2}"; CC=cc; CXX=c++; AR=ar
