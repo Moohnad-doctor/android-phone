@@ -373,7 +373,7 @@ static void q_got(ItemList *l, int cached, void *ud) {
   } else if (l) itemlist_free(l);
 }
 static void q_sug(ItemList *l, char names[6][128], int nn, void *ud) { if ((unsigned)(uintptr_t)ud != Q.gen) { if (l) itemlist_free(l); return; } Q.nsug = nn > 6 ? 6 : nn; for (int i = 0; i < Q.nsug; i++) snprintf(Q.sug[i], 128, "%s", names[i]); itemlist_clear(&Q.sugItems); if (l) { Q.sugItems = *l; free(l); } }
-static void q_ask(void) { for (int i = 0; i < Q.nd; i++) itemlist_clear(&Q.res[i]); Q.nd = Q.got = 0; Q.gen++; if (!Q.q[0]) Q.nsug = 0; itemlist_clear(&Q.sugItems); /* (the suggestions already shown stay) */ if (!Q.q[0]) return;
+static void q_ask(void) { for (int i = 0; i < Q.nd; i++) itemlist_clear(&Q.res[i]); Q.nd = Q.got = 0; Q.gen++; Q.v.pos = Q.v.vel = 0; Q.fr = -1; Q.fi = 0; if (!Q.q[0]) Q.nsug = 0; itemlist_clear(&Q.sugItems); /* (the suggestions already shown stay) */ if (!Q.q[0]) return;
   Q.nd = sb_search_defs(Q.q, Q.defs, MAXQ);
   if (!Q.nd) {
     char enc[200]; addon_urlenc(Q.q, enc, sizeof enc);
