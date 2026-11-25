@@ -269,7 +269,124 @@ static int key(int k) { Board *b = me();
 }
 static const Item *focused(void) { return focused_item(); }
 static int origin(float *x, float *y) { *x = SB_W / 2; *y = SB_H / 2; return 0; }
-void ph_home_category_open(int row) { Board *b = me(); if (!b || row < 0 || row >= b->n) return; const char *genre = strstr(b->rows[row].def.title, "Anime") || strstr(b->rows[row].def.title, "أنمي") ? "Animation" : ""; extern void board_open_category(const char *, const char *); board_open_category(b->rows[row].def.type, genre); }
+/* A phone-native category view: it owns its catalog query, three filter pills and a vertically scrolling poster grid.
+   It is an overlay over Home, so the top navigation pill and the Home spotlight remain intact underneath. */
+static struct {
+  CatalogDef base, query;
+  ItemList all, shown;
+  char title[96], genre[48];
+  int year, sort, menu, busy, focus;
+  unsigned gen;
+  Scroll scroll;
+} HC;
+static int hc_year(const Item *it) {
+  const char *p = it->metaLine;
+  while (p && *p) { if (p[0] >= '1' && p[0] <= '2' && p[1] >= '0' && p[1] <= '9' && p[2] >= '0' && p[2] <= '9' && p[3] >= '0' && p[3] <= '9') { int y = (p[0]-'0')*1000 + (p[1]-'0')*100 + (p[2]-'0')*10 + p[3]-'0'; if (y >= 1890 && y <= 2100) return y; } p++; }
+  return 0;
+}
+static double hc_rating(const Item *it) { const cJSON *m = sb_meta_cached(it->type, it->id); return js_num(m, "imdbRating", js_num(m, "rating", 0)); }
+static int hc_sort_mode;
+static int hc_cmp(const void *aa, const void *bb) {
+  const Item *a = aa, *b = bb;
+  double x = hc_sort_mode == 1 ? a->airAt : hc_sort_mode == 2 ? hc_year(a) : hc_rating(a);
+  double y = hc_sort_mode == 1 ? b->airAt : hc_sort_mode == 2 ? hc_year(b) : hc_rating(b);
+  return x < y ? 1 : x > y ? -1 : 0;
+}
+static void hc_apply(void) {
+  itemlist_clear(&HC.shown);
+  if (!HC.all.n) return;
+  HC.shown.items = calloc((size_t)HC.all.n, sizeof(Item));
+  if (!HC.shown.items) return;
+  for (int i = 0; i < HC.all.n; i++) {
+    int y = hc_year(&HC.all.items[i]), keep = !HC.year || (HC.year == 1 ? y > 0 && y < 1980 : HC.year == 2020 ? y >= 2020 && y <= 2023 : y == HC.year);
+    if (keep) HC.shown.items[HC.shown.n++] = HC.all.items[i];
+  }
+  HC.shown.total = HC.shown.n;
+  if (HC.sort && HC.shown.n > 1) { hc_sort_mode = HC.sort; qsort(HC.shown.items, (size_t)HC.shown.n, sizeof(Item), hc_cmp); }
+  if (HC.focus >= HC.shown.n) HC.focus = HC.shown.n ? HC.shown.n - 1 : 0;
+}
+static void hc_got(ItemList *l, int cached, void *ud) {
+  (void)cached;
+  if ((unsigned)(uintptr_t)ud != HC.gen) { if (l) itemlist_free(l); return; }
+  HC.busy = 0;
+  if (l) { itemlist_clear(&HC.all); HC.all = *l; free(l); hc_apply(); }
+}
+static void hc_query(void) {
+  HC.gen++; HC.busy = 1; HC.scroll.pos = HC.scroll.vel = HC.scroll.max = 0; HC.focus = 0;
+  itemlist_clear(&HC.all); itemlist_clear(&HC.shown);
+  HC.query = HC.base;
+  /* Replace, rather than duplicate, a genre extra already present on the source catalog. */
+  char clean[200] = "", extra[200]; snprintf(extra, sizeof extra, "%s", HC.base.extra);
+  const char *p = extra;
+  while (*p) {
+    const char *end = strchr(p, '&'); size_t n = end ? (size_t)(end - p) : strlen(p);
+    if (!(n >= 6 && !strncmp(p, "genre=", 6))) { size_t used = strlen(clean); if (used && used + 1 < sizeof clean) clean[used++] = '&', clean[used] = 0; if (n < sizeof clean - used) { memcpy(clean + used, p, n); clean[used + n] = 0; } }
+    if (!end) break; p = end + 1;
+  }
+  if (HC.genre[0]) { size_t n = strlen(clean); snprintf(clean + n, sizeof clean - n, "%sgenre=%s", n ? "&" : "", HC.genre); }
+  snprintf(HC.query.extra, sizeof HC.query.extra, "%s", clean);
+  snprintf(HC.query.url, sizeof HC.query.url, "%s%s%s.json", HC.query.path, clean[0] ? "/" : "", clean);
+  sb_catalog(&HC.query, hc_got, (void *)(uintptr_t)HC.gen);
+}
+static const char *hc_genres[] = { "All genres", "Action", "Comedy", "Drama", "Science Fiction", "Thriller", "Mystery", "Horror", "Adventure" };
+static const char *hc_years[] = { "All years", "2026", "2025", "2024", "2020–2023", "Classic" };
+static const int hc_year_values[] = { 0, 2026, 2025, 2024, 2020, 1 };
+static const char *hc_sorts[] = { "Most popular", "Now playing", "Newest airing", "Highest rated" };
+static int hc_choice;
+static int hc_count(int menu) { return menu == 0 ? 9 : menu == 1 ? 6 : 4; }
+static const char *hc_label(int menu, int i) { return menu == 0 ? T(hc_genres[i]) : menu == 1 ? hc_years[i] : T(hc_sorts[i]); }
+static void hc_filter_act(int menu, int b) { (void)b; HC.menu = HC.menu == menu ? -1 : menu; hc_choice = -1; }
+static void hc_option_act(int i, int b) {
+  (void)b;
+  if (HC.menu == 0) { snprintf(HC.genre, sizeof HC.genre, "%s", i == 0 ? "" : hc_genres[i]); }
+  else if (HC.menu == 1) HC.year = hc_year_values[i];
+  else if (HC.menu == 2) HC.sort = i;
+  HC.menu = -1; hc_query();
+}
+static void hc_focus(int r, int i) { (void)r; HC.focus = i; if (i >= 0 && i < HC.shown.n) accent_tint_fetch(HC.shown.items[i].id, HC.shown.items[i].poster, HC.shown.items[i].logo); }
+static const Item *hc_focused(void) { return HC.focus >= 0 && HC.focus < HC.shown.n ? &HC.shown.items[HC.focus] : NULL; }
+static void hc_open_item(const Item *it) { if (it) app_open_item(it); }
+static int hc_key(int k) {
+  if (k == K_BACK) { app_overlay = NULL; HC.menu = -1; return 1; }
+  if (k == K_OK && hc_focused()) { app_open_item(hc_focused()); return 1; }
+  if (k == K_CH_UP) { scroll_top(&HC.scroll); return 1; }
+  return 0;
+}
+static void hc_tick(float dt) { (void)dt; }
+static void hc_draw(void) {
+  gfx_rect(0, 0, SB_W, SB_H, 0xff000000u);
+  top_bar(HC.title, 1, HC.scroll.pos);
+  float top = phone_free_top() + 86, x = PAD, gap = 12;
+  const char *g = HC.genre[0] ? T(HC.genre) : T("All genres");
+  const char *yr = HC.year == 1 ? T("Classic") : HC.year == 2020 ? "2020–2023" : HC.year ? (HC.year == 2026 ? "2026" : HC.year == 2025 ? "2025" : "2024") : T("All years");
+  const char *so = T(hc_sorts[HC.sort]);
+  x += chip(x, top, g, HC.menu == 0 || HC.genre[0], hc_filter_act, 0, 0) + gap;
+  x += chip(x, top, yr, HC.menu == 1 || HC.year, hc_filter_act, 1, 0) + gap;
+  chip(x, top, so, HC.menu == 2 || HC.sort, hc_filter_act, 2, 0);
+  float gridY = top + 76;
+  if (HC.menu >= 0) {
+    int n = hc_count(HC.menu); float rowH = 54, panelH = n * rowH + 16, px = PAD, py = gridY;
+    float pw = SB_W - 2 * PAD;
+    ph_glass(px, py, pw, panelH, 22, RGBA(12, 12, 14, 246)); gfx_ring(px, py, pw, panelH, 22, 1, WHITE_A(28));
+    for (int i = 0; i < n; i++) { float ry = py + 8 + i * rowH; if (ph_pressed(px + 8, ry, pw - 16, rowH)) gfx_rrect(px + 8, ry, pw - 16, rowH, 14, WHITE_A(18)); text_draw(hc_label(HC.menu, i), px + 24, ry + rowH / 2 - text_line_height(F_BODY) / 2, F_BODY, 600, TXT, 0, pw - 48, ALIGN_START); hit_act(px + 8, ry, pw - 16, rowH, hc_option_act, i, 0); }
+    gridY += panelH + 16;
+  }
+  float bottom = SB_H - INS_B - BAR_H - 24;
+  ph_drag(0, gridY, SB_W, bottom - gridY, &HC.scroll, 1); scroll_tick(&HC.scroll);
+  float gy = gridY + 12 - HC.scroll.pos;
+  float gh = poster_grid(&HC.shown, gy, hc_focus, 0, HC.focus);
+  HC.scroll.max = fmaxf(0, gy + gh + HC.scroll.pos - bottom + 24);
+  if (HC.busy) spinner(SB_W / 2, gridY + 70, 20);
+  else if (!HC.shown.n) text_draw(T("None found"), SB_W / 2, gridY + 70, F_BODY, 500, TXT2, 0, SB_W - 2 * PAD, ALIGN_CENTER);
+}
+static Screen hcLayer = { NULL, NULL, hc_key, hc_tick, hc_draw, hc_focused, hc_open_item, NULL, NULL, NULL };
+void ph_home_category_open(int row) {
+  Board *b = me(); if (!b || row < 0 || row >= b->n) return;
+  HC.base = b->rows[row].def; snprintf(HC.title, sizeof HC.title, "%s", T(HC.base.title));
+  HC.genre[0] = 0; if (home_has(HC.base.title, "anime")) snprintf(HC.genre, sizeof HC.genre, "Animation");
+  HC.year = 0; HC.sort = 0; HC.menu = -1; HC.focus = 0; HC.scroll.pos = HC.scroll.vel = HC.scroll.max = 0;
+  phone_keyboard(0); hc_query(); app_overlay = &hcLayer;
+}
 Screen phHome = { enter, leave, key, tick, draw, focused, NULL, NULL, origin };
 /* the TV's boards' hooks the core calls when the library changed */
 void board_invalidate(void) { B[0].lib = B[1].lib = ~0u; }
