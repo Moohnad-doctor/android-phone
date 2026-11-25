@@ -57,7 +57,7 @@ float row_draw(const char *title, const ItemList *l, int wide, float y, Scroll *
   if (rowIdx >= 0) { int rtlHead = app_rtl(); float aw = 44, ax = rtlHead ? SB_W - PAD - aw : PAD, tx = rtlHead ? PAD : PAD + aw + 8, tw = SB_W - 2 * PAD - aw - 8;
     text_draw(title, tx, y + 6, F_H2 - 2, 800, TXT, -0.3f, tw, ALIGN_START); icon_draw_rot("ph_chev", ax + 10, y + 13, 24, WHITE_A(210), rtlHead ? 180 : 0); hit_act(ax, y, aw, 48, row_category_act, rowIdx, 0);
   } else text_draw(title, PAD, y + 6, F_H2 - 2, 800, TXT, -0.3f, SB_W - 2 * PAD, ALIGN_START);
-  s->max = l->n * (cw + gap) - gap + 2 * PAD - SB_W; scroll_tick(s); ph_drag(0, y + top, SB_W, ch + 8, s, 0);
+  s->max = fmaxf(0.0f, l->n * (cw + gap) - gap + 2 * PAD - SB_W); if (s->pos > s->max) s->pos = s->max; scroll_tick(s); ph_drag(0, y + top, SB_W, ch + 8, s, 0);
   int rtl = app_rtl();
   float acc = 0; for (int i = 0; i < l->n; i++) { float lk = l->items[i].cw || l->items[i].airAt > 0 ? leave_k(&l->items[i], 2) : 0, x = PAD + acc - s->pos; acc += (cw + gap) * (1 - lk); if (rtl) x = SB_W - x - cw; if (x > SB_W || x + cw < 0) continue;
     if (lk >= 0.999f) continue; if (lk > 0) { float k2 = 1 - 0.25f * lk; gfx_opacity_push(1 - lk); gfx_scale_push(k2, k2, x + cw / 2, y + top + ch / 2); } /* going: smaller and fainter, the next ones closing in */
