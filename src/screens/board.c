@@ -768,14 +768,16 @@ static int curOpt; static char optType[16][16]; /* the list's choice in use; the
 static int disc_genres(char (*out)[48], int max, int *req) { return disc_cat_genres(out, max, req); }
 static const char *type_txt(const char *t) { return !strcmp(t, "*") ? T("All") : !strcmp(t, "movie") ? T("Films") : !strcmp(t, "series") ? T("Series") : t; }
 static const char *chip_txt(int i, char *buf, size_t cap) {
-  if (FL.open && FL.which == i && FL.idx >= 0 && FL.idx < FL.n) { /* open: the choice the highlight is on (a catalog without its addon) */
+  if (FL.open && FL.which == i && FL.idx >= 0 && FL.idx < FL.n) {
     if (i == 1) { static CatalogDef cs[64]; int nc = disc_cats(cs, NULL, 64); if (FL.idx < nc) { snprintf(buf, cap, "%s", cs[FL.idx].title); return buf; } }
     return FL.opt[FL.idx]; }
   if (i == 0) return type_txt(FL.type[0] ? FL.type : "movie");
   if (i == 1) { static CatalogDef cs[64]; int nc = disc_cats(cs, NULL, 64); if (!nc) return T("Catalog"); snprintf(buf, cap, "%s", cs[FL.cat < nc ? FL.cat : 0].title); return buf; }
-  return FL.genre[0] ? FL.genre : T("All genres");
+  if (i == 2) return FL.genre[0] ? FL.genre : T("All genres");
+  if (i == 3) return FL.decade == 1 ? T("Classic") : FL.decade == 2020 ? "2020–2023" : FL.decade ? (FL.decade == 2026 ? "2026" : FL.decade == 2025 ? "2025" : "2024") : T("All years");
+  return FL.sort == 1 ? T("Now playing") : FL.sort == 2 ? T("Newest airing") : FL.sort == 3 ? T("Highest rated") : T("Most popular");
 }
-static int filt_chips(void) { char g[2][48]; int req; return disc_genres(g, 2, &req) > 0 ? 3 : 2; }
+static int filt_chips(void) { return 5; }
 static void filt_chip_focus(int r, int c) { Board *b = cur(); if (!b || r >= b->n) return; if (FL.open) { if (c == FL.which) FL.idx = -1; return; } /* (open: the pointer on its pill puts the highlight back on it) */ topNav.active = 0; if (spotOn(b)) { b->featOn = 0; b->featAt = 0; } b->rowIdx = r; b->rows[r].col = c; hero_soon(b, 150); }
 #define FL_PAD 12.0f        /* an open list: its gap from its pill */
 #define OPT_TW 520.0f       /* a choice's words at most this wide (an ellipsis after) */
@@ -837,8 +839,10 @@ static void filt_open(int which) {
     for (int i = 0; i < k && i < 200; i++) { snprintf(FL.opt[i], sizeof FL.opt[i], "%s", type_txt(optType[i])); if (!strcmp(optType[i], FL.type)) curOpt = i; } FL.n = k; }
   else if (which == 1) { static CatalogDef cs[64]; static char an[64][64]; int nc = disc_cats(cs, an, 64);
     for (int i = 0; i < nc && i < 200; i++) snprintf(FL.opt[i], sizeof FL.opt[i], "%s%s%s", cs[i].title, an[i][0] ? " · " : "", an[i]); FL.n = nc; curOpt = FL.cat < nc ? FL.cat : 0; }
-  else { int req, k = 0; static char g[199][48]; int ng = disc_genres(g, 199, &req); if (!req) snprintf(FL.opt[k++], sizeof FL.opt[k], "%s", T("All genres"));
+  else if (which == 2) { int req, k = 0; static char g[199][48]; int ng = disc_genres(g, 199, &req); if (!req) { snprintf(FL.opt[k], sizeof FL.opt[k], "%s", T("All genres")); k++; }
     for (int i = 0; i < ng && k < 200; i++) { snprintf(FL.opt[k], sizeof FL.opt[k], "%s", g[i]); if (!strcmp(g[i], FL.genre)) curOpt = k; k++; } FL.n = k; }
+  else if (which == 3) { const char *years[] = { "All years", "2026", "2025", "2024", "2020–2023", "Classic" }; int vals[] = { 0, 2026, 2025, 2024, 2020, 1 }; for (int i = 0; i < 6; i++) { snprintf(FL.opt[i], sizeof FL.opt[i], "%s", T(years[i])); if (FL.decade == vals[i]) curOpt = i; } FL.n = 6; }
+  else { const char *sorts[] = { "Most popular", "Now playing", "Newest airing", "Highest rated" }; for (int i = 0; i < 4; i++) { snprintf(FL.opt[i], sizeof FL.opt[i], "%s", T(sorts[i])); if (FL.sort == i) curOpt = i; } FL.n = 4; }
   FL.idx = curOpt; if (FL.idx > 3) FL.top = FL.idx - 3; FL.listW = 0; for (int i = 0; i < FL.n; i++) { { float tw = text_width(FL.opt[i], OPT_PX, 700, 0); FL.ow[i] = (tw < OPT_TW ? tw : OPT_TW) + 2 * OPT_PAD; } /* (as drawn: bold, a long name cut at OPT_TW) */ FL.ox[i] = FL.listW; FL.listW += FL.ow[i] + (i + 1 < FL.n ? 6 : 0); } tween_set(&FL.sx, 0); /* (the choices in one line, measured once) */
   FL.open = 1; tween_set(&FL.a, 0); tween_to(&FL.a, 1, 0.32f, EASE_CSS_EASEOUT); sound_focus(); /* its choices open out in the line, the pills after it move aside */
 }
@@ -849,9 +853,11 @@ static void filt_apply(Board *b) { /* the listing asked again with the strip's c
 static void genre_default(void) { int req; char g[1][48]; FL.genre[0] = 0; if (disc_genres(g, 1, &req) > 0 && req) snprintf(FL.genre, sizeof FL.genre, "%s", g[0]); } /* (a genre the catalog needs: its first, as the official app) */
 static int filt_set(int i) { /* the choice i of the open pill taken (the official rules: a type resets its catalog and genre, a catalog its genre); 1 when it changed */
   if (i < 0 || i >= FL.n) return 0; int ch = 0;
-  if (FL.which == 0) { if (i < 16 && strcmp(optType[i], FL.type)) { snprintf(FL.type, sizeof FL.type, "%s", optType[i]); FL.cat = 0; genre_default(); ch = 1; } }
+  if (FL.which == 0) { if (i < 16 && strcmp(optType[i], FL.type)) { snprintf(FL.type, sizeof FL.type, "%s", optType[i]); FL.cat = 0; FL.decade = 0; FL.sort = 0; genre_default(); ch = 1; } }
   else if (FL.which == 1) { if (i != FL.cat) { FL.cat = i; genre_default(); ch = 1; } }
-  else { int req; char g[1][48]; disc_genres(g, 1, &req); const char *v = !req && i == 0 ? "" : FL.opt[i]; if (strcmp(v, FL.genre)) { snprintf(FL.genre, sizeof FL.genre, "%s", v); ch = 1; } }
+  else if (FL.which == 2) { int req; char g[1][48]; disc_genres(g, 1, &req); const char *v = !req && i == 0 ? "" : FL.opt[i]; if (strcmp(v, FL.genre)) { snprintf(FL.genre, sizeof FL.genre, "%s", v); ch = 1; } }
+  else if (FL.which == 3) { static const int vals[] = { 0, 2026, 2025, 2024, 2020, 1 }; if (i < 6 && FL.decade != vals[i]) { FL.decade = vals[i]; ch = 1; } }
+  else if (FL.which == 4) { if (i < 4 && FL.sort != i) { FL.sort = i; ch = 1; } }
   if (ch) curOpt = i; return ch;
 }
 static void filt_choose(Board *b) {
