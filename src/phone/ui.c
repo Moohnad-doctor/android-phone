@@ -50,7 +50,7 @@ float row_draw_k(const char *title, const ItemList *l, int wide, float y, Scroll
   if (e >= 0.999f) return row_draw(title, l, wide, y, s, rowIdx, focus, focusedIdx);
   gfx_clip_push(0, y, SB_W, full * e); gfx_opacity_push(e); row_draw(title, l, wide, y - (1 - e) * 30, s, rowIdx, focus, focusedIdx); gfx_opacity_pop(); gfx_clip_pop(); return full * e; }
 float row_draw(const char *title, const ItemList *l, int wide, float y, Scroll *s, int rowIdx, HitFn focus, int focusedIdx) {
-  float cw = wide ? WIDE_CW : POSTER_W, ch = wide ? WIDE_CH : POSTER_H, gap = 14, top = 52;
+  float cw = wide ? WIDE_CW * 1.30f : POSTER_W * 1.25f, ch = wide ? WIDE_CH * 1.30f : POSTER_H * 1.25f, gap = 14, top = 52;
   if (!l || l->n <= 0) return 0;
   if (y + top + ch < -10 || y > SB_H + 10) { scroll_tick(s); return top + ch + 36; }
   text_draw(title, PAD, y + 6, F_H2 - 2, 800, TXT, -0.3f, SB_W - 2 * PAD, ALIGN_START);
@@ -81,7 +81,7 @@ int button(float x, float y, float w, float h, const char *icon, const char *lab
   if (kind == 1) { gfx_rrect(x, y, w, h, r, ACC); gfx_rrect_v(x, y, w, h, r, WHITE_A(50), WHITE_A(0)); }
   else if (kind == 2) gfx_rrect(x, y, w, h, r, pr ? WHITE_A(215) : WHITE_A(245));
   else if (kind == 3) { if (pr) gfx_rrect(x, y, w, h, r, WHITE_A(14)); }
-  else glass_rrect(x, y, w, h, r, pr ? RGBA(60, 56, 72, 230) : RGBA(46, 42, 58, 220), 0.14f, 0.02f, 0.5f);
+  else glass_rrect(x, y, w, h, r, pr ? RGBA(28, 28, 31, 230) : RGBA(12, 12, 14, 220), 0.14f, 0.02f, 0.5f);
   uint32_t fg = kind == 1 ? ACC_FG : kind == 2 ? RGB(14, 12, 20) : WHITE_A(240);
   float tw = label && *label ? text_width(label, F_BODY, 700, 0) : 0, iw = icon ? 36 : 0, g = icon && tw ? 12 : 0, cx = x + w / 2 - (iw + g + tw) / 2;
   if (icon) icon_draw(icon, cx, y + h / 2 - 18, 36, fg);
