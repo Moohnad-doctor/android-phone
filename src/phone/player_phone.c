@@ -898,7 +898,7 @@ void phone_player_channels(void) { if (panel != 9) { ui_show(1); a_panel(9, 0); 
 void phone_player_panel_close(void) { if (panel) a_back(0, 0); }
 void phone_player_list_top(void) { panV.pos = 0; panV.vel = 0; }
 /* Back (the phone's): a panel first, then the player */
-int phone_player_back(void) { if (locked) { lockShownAt = app_now(); return 1; } if (panel) { a_back(0, 0); return 1; } return 0; }
+int phone_player_back(void) { if (locked) { watch_progress_save_now(); lockShownAt = app_now(); return 1; } if (panel) { a_back(0, 0); return 1; } watch_progress_save_now(); return 0; }
 float phone_player_close_k(void) { return closeShade; }
 /* the card's place now (for app.c: the room around it, its corners, the controls moved with it): 0 when not pulled */
 float phone_player_close_geo(float *tx, float *ty, float *sc, float *r) { *tx = cTX; *ty = cTY; *sc = cS; *r = cR; return cF; }
