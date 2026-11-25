@@ -155,7 +155,7 @@ jobs:
         run: |
           set -euo pipefail
           "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" --target=aarch64-linux-android24 -std=c11 -D_GNU_SOURCE -fsyntax-only \
-            -I"$HOME/stremiobrew-build/android/work/arm64-v8a/deps/include" \
+            -Ibuild/phone-arm64-v8a/deps/include \
             -Isrc -Ithird_party/freetype/include -Ithird_party/harfbuzz/src -Ithird_party/fribidi/lib \
             -Ithird_party/config/fribidi -Ithird_party/cjson -Ithird_party/stb -Ithird_party/qrcodegen \
             -Ithird_party/webp -Ithird_party/crypto -Ithird_party/libass src/screens/search.c
