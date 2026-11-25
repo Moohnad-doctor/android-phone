@@ -14,6 +14,8 @@
 #include "ui/widgets.h"
 #include "ui/orbs.h"
 #include "core/coll.h"
+#include "core/stremio.h"
+#include "core/addons.h"
 #include <math.h>
 
 /* ---- Library ---- */
@@ -357,12 +359,35 @@ Screen phDl = { dl_enter, NULL, dl_key, NULL, dl_draw, NULL, NULL, NULL, NULL };
 Screen phLib = { lib_enter, NULL, lib_key, lib_tick, lib_draw, lib_focused, NULL, NULL, NULL };
 
 /* ---- Search ---- */
-#define MAXQ 12
+#define MAXQ 64
 static struct { char q[160]; double typedAt; int asked, sugAsked, editing; CatalogDef defs[MAXQ]; ItemList res[MAXQ]; int nd, got; char sug[6][128]; int nsug; ItemList sugItems; unsigned gen; Scroll v; int fr, fi; } Q;
-static void q_got(ItemList *l, int cached, void *ud) { (void)cached; unsigned t = (unsigned)(uintptr_t)ud; if ((t >> 8) != (Q.gen & 0xffffff) || !l) { if (l) itemlist_free(l); return; } int k = t & 255; if (k < Q.nd) { itemlist_clear(&Q.res[k]); Q.res[k] = *l; free(l); Q.got++; } else itemlist_free(l); }
+static void q_got(ItemList *l, int cached, void *ud) {
+  (void)cached;
+  unsigned t = (unsigned)(uintptr_t)ud;
+  if ((t >> 8) != (Q.gen & 0xffffff)) { if (l) itemlist_free(l); return; }
+  int k = t & 255;
+  if (k < Q.nd) {
+    itemlist_clear(&Q.res[k]);
+    if (l) { Q.res[k] = *l; free(l); }
+    Q.got++; /* a failed addon request is still complete: never leave the spinner running forever */
+  } else if (l) itemlist_free(l);
+}
 static void q_sug(ItemList *l, char names[6][128], int nn, void *ud) { if ((unsigned)(uintptr_t)ud != Q.gen) { if (l) itemlist_free(l); return; } Q.nsug = nn > 6 ? 6 : nn; for (int i = 0; i < Q.nsug; i++) snprintf(Q.sug[i], 128, "%s", names[i]); itemlist_clear(&Q.sugItems); if (l) { Q.sugItems = *l; free(l); } }
 static void q_ask(void) { for (int i = 0; i < Q.nd; i++) itemlist_clear(&Q.res[i]); Q.nd = Q.got = 0; Q.gen++; if (!Q.q[0]) Q.nsug = 0; itemlist_clear(&Q.sugItems); /* (the suggestions already shown stay) */ if (!Q.q[0]) return;
-  Q.nd = sb_search_defs(Q.q, Q.defs, MAXQ); for (int i = 0; i < Q.nd; i++) sb_catalog(&Q.defs[i], q_got, (void *)(uintptr_t)(((Q.gen & 0xffffff) << 8) | i)); if (!Q.sugAsked) { Q.sugAsked = 1; sb_suggest(Q.q, q_sug, (void *)(uintptr_t)Q.gen); } }
+  Q.nd = sb_search_defs(Q.q, Q.defs, MAXQ);
+  if (!Q.nd) {
+    char enc[200]; addon_urlenc(Q.q, enc, sizeof enc);
+    const char *types[2] = { "movie", "series" };
+    for (int i = 0; i < 2; i++) {
+      memset(&Q.defs[Q.nd], 0, sizeof Q.defs[Q.nd]);
+      snprintf(Q.defs[Q.nd].type, sizeof Q.defs[Q.nd].type, "%s", types[i]);
+      snprintf(Q.defs[Q.nd].url, sizeof Q.defs[Q.nd].url, CINEMETA "/catalog/%s/top/search=%s.json", types[i], enc);
+      Q.nd++;
+    }
+  }
+  for (int i = 0; i < Q.nd; i++) sb_catalog(&Q.defs[i], q_got, (void *)(uintptr_t)(((Q.gen & 0xffffff) << 8) | i));
+  if (!Q.sugAsked) { Q.sugAsked = 1; sb_suggest(Q.q, q_sug, (void *)(uintptr_t)Q.gen); }
+}
 /* the suggestions on their own, as soon as the typing pauses a moment: long before the posters */
 static unsigned sugGen; static void q_sug_only(ItemList *l, char names[6][128], int nn, void *ud) { if ((unsigned)(uintptr_t)ud != sugGen) { if (l) itemlist_free(l); return; } Q.nsug = nn > 6 ? 6 : nn; for (int i = 0; i < Q.nsug; i++) snprintf(Q.sug[i], 128, "%s", names[i]); itemlist_free(l); }
 static TEd qE; static TEd *q_ed(void) { if (!qE.s) { qE.s = Q.q; qE.cap = sizeof Q.q; } return &qE; }
@@ -506,7 +531,7 @@ static int so_key(int k) {
 static void so_tick(float dt) { tween_tick(&sA, dt); q_tick(dt); if (!sOpen && sA.v <= 0.001f) { extern Screen searchLayer; if (app_overlay == &searchLayer) app_overlay = NULL; } }
 static void so_draw(void) {
   float a = sA.v; if (a <= 0.001f) return; hit_shield(0, 0, SB_W, SB_H);
-  gfx_rect(0, 0, SB_W, SB_H, col_alpha(PAGE | 0xff000000u, 0.9f * a));
+  gfx_rect(0, 0, SB_W, SB_H, PAGE | 0xff000000u);
   gfx_opacity_push(a); float dy = 30 * (1 - ease_apply(EASE_OUT, a)); gfx_offset_push(0, dy); q_draw(); gfx_offset_pop(); gfx_opacity_pop();
 }
 static const Item *so_focused(void) { return q_focused(); }
