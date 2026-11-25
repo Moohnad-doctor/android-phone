@@ -196,7 +196,9 @@ jobs:
           grep -Fx "ndk.dir=$NDK" android-phone/local.properties
           grep -q "ndkVersion '27.2.12479018'" android-phone/app/build.gradle
           grep -q '"sbengine"' android-phone/app/src/main/java/app/stremioorigin/phone/MainActivity.java
+          grep -q '"sbdl"' android-phone/app/src/main/java/app/stremioorigin/phone/MainActivity.java
           test -s android-phone/app/src/main/jniLibs/arm64-v8a/libsbengine.so
+          test -s android-phone/app/src/main/jniLibs/arm64-v8a/libsbdl.so
           VERSION="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" android-phone/app/build.gradle | head -1)"
           test -n "$VERSION"
           APK_PATH="dist/myth-$VERSION-arm64-v8a-debug.apk"
