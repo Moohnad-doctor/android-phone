@@ -61,15 +61,13 @@ for ABI in "${ABIS[@]}"; do
   mkdir -p "$JNI/$ABI"
   rm -f "$JNI/$ABI"/*.so
   B="$ROOT/build/phone-$ABI"
-  for f in "$B/deps/lib/libSDL2.so" "$B/deps/lib/libcurl.so" "$B/libmain.so" "$B/libsbengine.so"; do
+  for f in "$B/deps/lib/libSDL2.so" "$B/deps/lib/libcurl.so" "$B/libmain.so" "$B/libsbengine.so" "$B/libsbdl.so"; do
     if [ ! -s "$f" ]; then
       echo "error: required native library is missing: $f" >&2
       exit 1
     fi
     cp "$f" "$JNI/$ABI/"
   done
-  # the download engine (tools/gopeed/build.sh android-arm64 / android-armv7): optional, downloads need it
-  if [ -f "$B/libsbdl.so" ]; then cp "$B/libsbdl.so" "$JNI/$ABI/"; else echo "note: no $B/libsbdl.so (downloads will not work on the phone)" >&2; fi
   # the seek-preview decoder (tools/phone/build-prev.sh): only when asked (SB_PREVIEW_LIB=1), shipping it is the owner's call
   if [ "${SB_PREVIEW_LIB:-0}" = 1 ]; then PL="$ROOT/build/phone-prev/$ABI/libsbprev.so"; if [ -f "$PL" ]; then cp "$PL" "$JNI/$ABI/"; else echo "note: no $PL (run tools/phone/build-prev.sh)" >&2; fi; fi
 done
