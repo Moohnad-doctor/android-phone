@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The formatting is rough and I'm not going to bother. Pull requests that fix it are welcome; complaints without one help neither me nor the end user.
-# Build the Stremio Origin phone APK.
+# Build the myth phone APK.
 # Usage: tools/phone/apk.sh [debug|release]
 set -euo pipefail
 
@@ -61,15 +61,13 @@ for ABI in "${ABIS[@]}"; do
   mkdir -p "$JNI/$ABI"
   rm -f "$JNI/$ABI"/*.so
   B="$ROOT/build/phone-$ABI"
-  for f in "$B/deps/lib/libSDL2.so" "$B/deps/lib/libcurl.so" "$B/libmain.so"; do
-    if [ -f "$f" ]; then
-      cp "$f" "$JNI/$ABI/"
-    else
-      echo "warning: missing $f" >&2
+  for f in "$B/deps/lib/libSDL2.so" "$B/deps/lib/libcurl.so" "$B/libmain.so" "$B/libsbengine.so"; do
+    if [ ! -s "$f" ]; then
+      echo "error: required native library is missing: $f" >&2
+      exit 1
     fi
+    cp "$f" "$JNI/$ABI/"
   done
-  # the torrent engine (tools/build-engine.sh android-arm64 / android-armv7): optional, torrents need it
-  if [ -f "$B/libsbengine.so" ]; then cp "$B/libsbengine.so" "$JNI/$ABI/"; else echo "note: no $B/libsbengine.so (torrents will not play on the phone)" >&2; fi
   # the download engine (tools/gopeed/build.sh android-arm64 / android-armv7): optional, downloads need it
   if [ -f "$B/libsbdl.so" ]; then cp "$B/libsbdl.so" "$JNI/$ABI/"; else echo "note: no $B/libsbdl.so (downloads will not work on the phone)" >&2; fi
   # the seek-preview decoder (tools/phone/build-prev.sh): only when asked (SB_PREVIEW_LIB=1), shipping it is the owner's call
@@ -108,15 +106,15 @@ ls -dt "$ROOT"/dist/dbg/*/ 2>/dev/null | grep -v '/release-' | tail -n +6 | whil
 SUF="-$MODE"; [ "$MODE" = release ] && SUF=""
 mkdir -p "$ROOT/dist"
 if [ -z "$SUF" ]; then
-  rm -f "$ROOT/dist/stremio-origin-phone-"*"-arm64-v8a.apk" "$ROOT/dist/stremio-origin-phone-"*"-armeabi-v7a.apk"
+  rm -f "$ROOT/dist/myth-"*"-arm64-v8a.apk" "$ROOT/dist/myth-"*"-armeabi-v7a.apk"
 else
-  rm -f "$ROOT/dist/stremio-origin-phone-"*"$SUF.apk"
+  rm -f "$ROOT/dist/myth-"*"$SUF.apk"
 fi
 n=0
 for ABI in "${ABIS[@]}"; do
   for f in "$OUTDIR/app-$ABI-$MODE.apk" "$OUTDIR/app-$ABI-$MODE-unsigned.apk"; do
     [ -f "$f" ] || continue
-    DEST="$ROOT/dist/stremio-origin-phone-$VERSION-$ABI$SUF.apk"
+    DEST="$ROOT/dist/myth-$VERSION-$ABI$SUF.apk"
     cp "$f" "$DEST"
     n=$((n + 1))
     echo "APK: $DEST ($(ls -lh "$DEST" | awk '{print $5}'))"
