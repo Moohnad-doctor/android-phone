@@ -844,7 +844,7 @@ int phone_player_finger(const SDL_Event *e) {
     if (G.mode == 8) { G.mode = 0; return 1; }
     if (G.mode == 11) { G.mode = 0; float pw = fminf(1200.0f, SB_W * 0.52f); if (now - G.lt > 0.08) { TD.vx = TD.vy = 0; } /* (held still before letting go: no throw) */
       float px2 = TD.ox + TD.vx * 0.18f, py2 = TD.oy + TD.vy * 0.18f; /* where the throw would carry it */
-      if (px2 > pw * 0.36f || py2 > SB_H * 0.28f) { int kind = panel ? panel : shownKind; TD.on = 2; a_back(0, 0); tween_to(&panA, 0, 0.42f, EASE_WEB); /* far enough: it goes home into its pill, shrinking and rounding as it goes (the controls coming back with it), the pill taking it with a little bounce */
+      if (px2 > pw * 0.36f || py2 > SB_H * 0.28f) { TD.on = 2; a_back(0, 0); tween_to(&panA, 0, 0.42f, EASE_WEB); /* far enough: it goes home into its pill, shrinking and rounding as it goes (the controls coming back with it), the pill taking it with a little bounce */
         pplat_haptic_k(HK_CLICK, 0.6f); }
       else { TD.on = 2; } return 1; } /* else home on a spring */
     if (G.mode == 12) G.mode = 0; /* a tap on the title row */
