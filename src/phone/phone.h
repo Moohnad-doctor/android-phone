@@ -14,7 +14,7 @@
 
 extern float INS_T, INS_B, phDt;  /* the status bar and the gesture bar, in units; this frame's step */
 extern float phMiniH; /* the cast mini player's room over the bar (0 when none) */
-#define BAR_H (124.0f + phMiniH)   /* the floating bar and its margin, above INS_B (and the cast mini player's room when it is there) */
+#define BAR_H 40.0f   /* bottom gesture/safe-area margin; the navigation pill now lives at the top */
 #define PAD 28.0f
 #define TXT RGB(0xe9, 0xe9, 0xee)
 #define TXT2 WHITE_A(168)
@@ -38,6 +38,7 @@ void phone_finger(const SDL_Event *e, int w, int h);
 void phone_tick(float dt);
 void phone_bar_draw(void);           /* the floating navigation pill (from core/app.c in place of the top bar) */
 float phone_free_top(void);
+float phone_free_bottom(void);
 /* the row of the page's own choices, just above the bar (filters, chips): filled while the page draws */
 void  ctx_row(HitFn act);            /* act(i, 0) when choice i is tapped */
 void  ctx_add(const char *label, int on);
