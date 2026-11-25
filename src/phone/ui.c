@@ -44,7 +44,7 @@ void card_at(const Item *it, float x, float y, float w, float h, int wide, int l
    it gliding up; a new one opens, the rows under it making room; *k is its own (kept by the caller, -1 at first) */
 float row_draw_k(const char *title, const ItemList *l, int wide, float y, Scroll *s, int rowIdx, HitFn focus, int focusedIdx, float *k) {
   int n = l ? l->n : 0, alive = 0; for (int i = 0; i < n; i++) if (!((l->items[i].cw || l->items[i].airAt > 0) && leave_k(&l->items[i], 2) > 0)) { alive = 1; break; }
-  float want = alive ? 1 : 0, full = (wide ? WIDE_CH : POSTER_H) + 52 + 36; if (*k < 0) *k = want; else { *k += (want - *k) * fminf(1, phDt * 7); if (fabsf(*k - want) < 0.003f) *k = want; }
+  float want = alive ? 1 : 0, full = (wide ? WIDE_CH * 1.30f : POSTER_H * 1.25f) + 52 + 36; if (*k < 0) *k = want; else { *k += (want - *k) * fminf(1, phDt * 7); if (fabsf(*k - want) < 0.003f) *k = want; }
   if (*k <= 0.001f) return 0; float e = *k * *k * (3 - 2 * *k);
   if (!n) return full * e; /* (gone: only its room, closing) */
   if (e >= 0.999f) return row_draw(title, l, wide, y, s, rowIdx, focus, focusedIdx);
@@ -57,8 +57,17 @@ float row_draw(const char *title, const ItemList *l, int wide, float y, Scroll *
   if (rowIdx >= 0) { int rtlHead = app_rtl(); float aw = 44, ax = rtlHead ? SB_W - PAD - aw : PAD, tx = rtlHead ? PAD : PAD + aw + 8, tw = SB_W - 2 * PAD - aw - 8;
     text_draw(title, tx, y + 6, F_H2 - 2, 800, TXT, -0.3f, tw, ALIGN_START); icon_draw_rot("ph_chev", ax + 10, y + 13, 24, WHITE_A(210), rtlHead ? 180 : 0); hit_act(tx, y, tw, 48, row_category_act, rowIdx, 0); hit_act(ax, y, aw, 48, row_category_act, rowIdx, 0);
   } else text_draw(title, PAD, y + 6, F_H2 - 2, 800, TXT, -0.3f, SB_W - 2 * PAD, ALIGN_START);
-  s->max = fmaxf(0.0f, l->n * (cw + gap) - gap + 2 * PAD - SB_W); if (s->pos > s->max) s->pos = s->max; scroll_tick(s); ph_drag(0, y + top, SB_W, ch + 8, s, 0);
   int rtl = app_rtl();
+  s->max = fmaxf(0.0f, l->n * (cw + gap) - gap + 2 * PAD - SB_W);
+  if (s->pos > s->max) s->pos = s->max;
+  scroll_tick(s);
+  /* In RTL, keep the logical offset inside its exact content bounds even while a finger is down.
+     This prevents the end-of-row spring from pulling the final cards back out of reach. */
+  if (rtl) {
+    if (s->pos < 0) { s->pos = 0; if (s->vel < 0) s->vel = 0; }
+    else if (s->pos > s->max) { s->pos = s->max; if (s->vel > 0) s->vel = 0; }
+  }
+  ph_drag(0, y + top, SB_W, ch + 8, s, 0);
   float acc = 0; for (int i = 0; i < l->n; i++) { float lk = l->items[i].cw || l->items[i].airAt > 0 ? leave_k(&l->items[i], 2) : 0, x = PAD + acc - s->pos; acc += (cw + gap) * (1 - lk); if (rtl) x = SB_W - x - cw; if (x > SB_W || x + cw < 0) continue;
     if (lk >= 0.999f) continue; if (lk > 0) { float k2 = 1 - 0.25f * lk; gfx_opacity_push(1 - lk); gfx_scale_push(k2, k2, x + cw / 2, y + top + ch / 2); } /* going: smaller and fainter, the next ones closing in */
     int pr = ph_pressed(x, y + top, cw, ch) || (focusedIdx == i && app_hold_progress() > 0);
