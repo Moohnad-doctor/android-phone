@@ -19,8 +19,8 @@ extern float phMiniH; /* the cast mini player's room over the bar (0 when none) 
 #define TXT RGB(0xe9, 0xe9, 0xee)
 #define TXT2 WHITE_A(168)
 #define TXT3 WHITE_A(118)
-#define SURF RGB(0x1f, 0x1c, 0x28)
-#define SURF2 RGB(0x2a, 0x26, 0x36)
+#define SURF 0xff000000u
+#define SURF2 RGB(0x0d, 0x0d, 0x0f)
 #define F_LOGO 44
 #define F_H1 46
 #define F_H2 32
@@ -36,7 +36,7 @@ extern float phMiniH; /* the cast mini player's room over the bar (0 when none) 
 void phone_layout(int dw, int dh);
 void phone_finger(const SDL_Event *e, int w, int h);
 void phone_tick(float dt);
-void phone_bar_draw(void);           /* the bar at the bottom (from core/app.c in place of the top bar) */
+void phone_bar_draw(void);           /* the floating navigation pill (from core/app.c in place of the top bar) */
 /* the row of the page's own choices, just above the bar (filters, chips): filled while the page draws */
 void  ctx_row(HitFn act);            /* act(i, 0) when choice i is tapped */
 void  ctx_add(const char *label, int on);
