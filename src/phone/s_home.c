@@ -121,10 +121,16 @@ static void cw_card_labels(const ItemList *l, const Scroll *s, float y) {
       float bw = text_width(rem, F_TINY, 800, 0) + 24, bx = x + 12, by = y + top + 12;
       gfx_rrect(bx, by, bw, 34, 17, BLACK_A(190)); text_draw(rem, bx + bw / 2, by + 17 - text_line_height(F_TINY) / 2.0f, F_TINY, 800, WHITE_A(245), 0, 0, ALIGN_CENTER);
     }
-    if (!strcmp(l->items[i].type, "series")) {
-      int season = 0, episode = 0; const char *sep = strchr(l->items[i].videoId, ':'); if (sep) sscanf(sep + 1, "%d:%d", &season, &episode);
-      if (season > 0 && episode > 0) { char ep[32], label[320]; snprintf(ep, sizeof ep, "S%d E%d", season, episode); snprintf(label, sizeof label, "%s  ·  %s", l->items[i].name, ep); text_draw(label, x + cw / 2, y + top + ch + 5, F_TINY + 1, 700, TXT, 0, cw - 8, ALIGN_CENTER); }
-    } else text_draw(l->items[i].name, x + cw / 2, y + top + ch + 5, F_TINY + 1, 700, TXT, 0, cw - 8, ALIGN_CENTER);
+    {
+      char label[384];
+      if (!strcmp(l->items[i].type, "series")) {
+        int season = 0, episode = 0; const char *sep = strchr(l->items[i].videoId, ':');
+        if (sep) sscanf(sep + 1, "%d:%d", &season, &episode);
+        if (season > 0 && episode > 0) snprintf(label, sizeof label, "%s  ·  S%d E%d", l->items[i].name, season, episode);
+        else snprintf(label, sizeof label, "%s", l->items[i].name);
+      } else snprintf(label, sizeof label, "%s", l->items[i].name);
+      text_draw(label, x + cw / 2, y + top + ch + 5, F_TINY + 1, 700, TXT, 0, cw - 8, ALIGN_CENTER);
+    }
   }
 }
 
@@ -247,8 +253,7 @@ static void draw(void) {
     if (fKey != b->filter || fN != b->cw.n || fP != b->cw.items) { fKey = b->filter; fN = b->cw.n; fP = b->cw.items; itemlist_clear(&cwF); cwF.items = calloc(b->cw.n ? b->cw.n : 1, sizeof(Item)); cwF.n = 0;
       for (int i = 0; i < b->cw.n; i++) if (b->filter == 0 || !strcmp(b->cw.items[i].type, b->filter == 1 ? "series" : "movie")) cwF.items[cwF.n++] = b->cw.items[i]; }
     { static float cwK = -1; const ItemList *watch = b->filter ? &cwF : &b->cw; float rowY = y; if (cwF.n > 0) b->lastY[0] = y + b->v.pos; y += row_draw_k(T("Continue Watching"), watch, 1, y, &b->cws, -2, focus, b->fr == -2 ? b->fi : -1, &cwK); cw_card_labels(watch, &b->cws, rowY); } }
-  { static Scroll lvS; if (!b->filter) y += ph_live_row(y, &lvS, -5, focus, b->fr == -5 ? b->fi : -1); } /* a live addon on: its channels, All channels first */
-  { static float upK = -1; if (b->filter != 2) y += row_draw_k(T("Upcoming episodes"), &b->up, 1, y, &b->ups, -4, focus, b->fr == -4 ? b->fi : -1, &upK); } /* the library's series airing in the next two weeks: wide cards as the TV's, the episode named on it and when it airs in a chip (Today, Tomorrow, In 3 days) */
+  /* Home's discovery surface is intentionally limited to the five curated catalog rows below. */
   int waiting = 0;
   for (int i = 0; i < b->n; i++) { HRow *r = &b->rows[i]; b->lastY[i + 2] = y + b->v.pos - INS_T - 20;
     if (b->filter && strcmp(r->def.type, b->filter == 1 ? "series" : "movie")) continue;
