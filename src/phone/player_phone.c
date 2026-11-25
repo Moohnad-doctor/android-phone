@@ -55,7 +55,7 @@ static void phit(float x, float y, float w, float h, PFn fn, int a, int b) { if 
 static int phit_at(float x, float y) { for (int i = nhit - 1; i >= 0; i--) { PHit *p = &hits[i]; if (x >= p->x && y >= p->y && x < p->x + p->w && y < p->y + p->h) { p->fn(p->a, p->b); return 1; } } return 0; }
 
 #include "core/seekprev.h"
-static void prev_pic(double t, float cx, float bottom, float a); static void prev_focus(void); static int prev_strip(double t, double from, int showDelta, float a); static Tween seekK; static double seekStartAt; static double stripT = -1, stripFrom; static int stripDelta; /* (seek previews, below; when this seek began: the hint shows a moment, then goes) */
+static void prev_focus(void); static int prev_strip(double t, double from, int showDelta, float a); static Tween seekK; static double seekStartAt; static double stripT = -1, stripFrom; static int stripDelta; /* (seek previews, below; when this seek began: the hint shows a moment, then goes) */
 static Tween uiA, lockA, bubA, lvlA, jumpA, panA; static int locked, lvlKind, jumpDir, jumps, panel; static float lvl, scrubT; static double lockShownAt, jumpAt, hideAt;
 static SbRect pillR[10], orgR; static int shownKind, srcF = -1, infoRow = -1; static Tween infoA; static double downAt; /* pillR: where each pill was drawn (a panel grows from it); srcF: the addon shown (-1 all); infoRow: the stream whose details are up */
 static struct { float x, y, w, h; int i; } holds[64]; static int nholds;
@@ -769,11 +769,6 @@ float phone_subs_alpha(void) { return 1 - closeShade; } /* the subtitles go with
 /* "Previews ready": said once a video (the scrub it is first seen at 100 %), as the TVs; later scrubs show the pictures alone */
 extern int player_ready_seen(const char *vid); extern void player_ready_mark(const char *vid); extern const char *player_vid(void);
 static int ready_hidden(int pc) { static double scrubAt = -1; static int done; if (scrubAt != seekStartAt) { scrubAt = seekStartAt; done = pc >= 100 && player_ready_seen(player_vid()); } if (pc >= 100 && !done) player_ready_mark(player_vid()); return done; }
-static void prev_badge(float cx, float y, float a) { int pc = sp_progress(); if (pc >= 100 && ready_hidden(pc)) return; if (pc >= 0 && pc >= 90) a *= clampf(1 - (float)(app_now() - seekStartAt - 3.1) / 0.6f, 0, 1); if (pc < 0 || a <= 0.01f) return; char t[48]; if (pc >= 100) snprintf(t, sizeof t, "%s", T("Previews ready")); else { char n[8]; snprintf(n, sizeof n, "%d", pc); snprintf(t, sizeof t, "%s", T1("Previews {n}%", "n", n)); } /* (how much of the film has its pictures, while seeking) */
-  float w = text_width(t, 22, 700, 0) + 28, h = 36, x = clampf(cx - w / 2, 20, SB_W - 20 - w); gfx_opacity_push(a); gfx_rrect(x, y, w, h, h / 2, BLACK_A(140)); if (pc < 100) gfx_rrect(x, y + h - 3, w * pc / 100.0f, 3, 1.5f, ACC2 | 0xff000000u); text_draw(t, x + w / 2, y + h / 2 - text_line_height(22) / 2.0f, 22, 700, WHITE_A(pc >= 100 ? 200 : 235), 0, 0, ALIGN_CENTER); gfx_opacity_pop(); }
-static void prev_pic(double t, float cx, float bottom, float a) { SpPic p; if (a <= 0.01f || !sp_get(t, &p)) { prev_badge(cx, bottom - 50, a); return; } float w = SB_W > SB_H ? 420 : 360, h = w * p.h / p.w, x = clampf(cx - w / 2, 20, SB_W - 20 - w), y = bottom - h - 14;
-  int under = 0; if (y < 20) { y = bottom + 120 + 14; under = 1; } /* (no room above, the slide's bubble near the top: under it) */
-  gfx_opacity_push(a); gfx_shadow(x, y + 10, w, h, 16, 34, BLACK_A(150)); gfx_image(p.tex, x, y, w, h, 16, WHITE_A(255), 0, p.v0, p.u1, p.v1); gfx_ring(x, y, w, h, 16, 1, WHITE_A(26)); gfx_opacity_pop(); prev_badge(x + w / 2, under ? y + h + 10 : y - 44, a); } /* (the same brightness whether it is the exact picture or the nearest: no flicker as the finger moves; a hairline edge, a soft shadow) */
 /* seeking with previews: the controls step back, the picture in the middle of the screen, its neighbours either side
    smaller and fainter, the time under it (and how far from where it was, sliding); the same for the bar and the slide.
    0: no picture yet (the plain bubble stays) */
