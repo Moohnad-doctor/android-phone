@@ -434,7 +434,8 @@ static int q_item_matches(const Item *it) {
     if (!*s) break;
     char *e = s; while (*e && !isspace((unsigned char)*e)) e++;
     char save = *e; *e = 0; int found = q_has_ci(hay, s); *e = save;
-    if (!found) return 0; s = e;
+    if (!found) return 0;
+    s = e;
   }
   return 1;
 }
@@ -442,7 +443,8 @@ static void q_filter_results(ItemList *l) {
   if (!l || !Q.q[0]) return;
   int n = 0;
   for (int i = 0; i < l->n; i++) if (q_item_matches(&l->items[i])) {
-    if (n != i) l->items[n] = l->items[i]; n++;
+    if (n != i) l->items[n] = l->items[i];
+    n++;
   }
   l->n = n;
 }
