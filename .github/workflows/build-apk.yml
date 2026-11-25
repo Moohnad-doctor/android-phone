@@ -136,7 +136,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          find tools -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+          find tools tests -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
 
       - name: Build native dependencies (arm64-v8a only)
         shell: bash
