@@ -376,7 +376,7 @@ static void q_sug(ItemList *l, char names[6][128], int nn, void *ud) { if ((unsi
 static void q_ask(void) { for (int i = 0; i < Q.nd; i++) itemlist_clear(&Q.res[i]); Q.nd = Q.got = 0; Q.gen++; Q.v.pos = Q.v.vel = 0; Q.fr = -1; Q.fi = 0; if (!Q.q[0]) Q.nsug = 0; itemlist_clear(&Q.sugItems); /* (the suggestions already shown stay) */ if (!Q.q[0]) return;
   Q.nd = sb_search_defs(Q.q, Q.defs, MAXQ);
   if (!Q.nd) {
-    char enc[200]; addon_urlenc(Q.q, enc, sizeof enc);
+    char enc[448]; addon_urlenc(Q.q, enc, sizeof enc);
     const char *types[2] = { "movie", "series" };
     for (int i = 0; i < 2; i++) {
       memset(&Q.defs[Q.nd], 0, sizeof Q.defs[Q.nd]);
