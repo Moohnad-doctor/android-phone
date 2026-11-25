@@ -489,7 +489,9 @@ void p2p_pace(int playing, int buffering, double dur) {
   if (!E || ENG() != ENG_ON || !A.ih[0]) return;
   if (dur > 60 && A.size > 0 && dur != A.dur) { A.dur = dur; window_follow((double)A.size / dur); }
   if (playing && !buffering) { A.calm++; A.playedOnce = 1; A.stallT0 = 0; } else A.calm = 0;
-  int gentle = A.calm >= 15 && A.size > 0 && dur > 60;
+  /* The playback-only bitrate cap is global to the engine. Never leave it on
+     while a kept-file fetch is active: offline downloads share this torrent session. */
+  int gentle = A.calm >= 15 && A.size > 0 && dur > 60 && !downloadProfile;
   if (gentle == A.gentle) return;
   A.gentle = gentle;
   double cap = 2.0 * (double)A.size / dur; if (cap < 1048576) cap = 1048576;

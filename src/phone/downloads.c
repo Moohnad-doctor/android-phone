@@ -135,7 +135,7 @@ static void start_from(int i, const char *url) {
    played in between, the app closed) ---- */
 #include "core/p2p.h"
 static int is_p2p(const Dl *d) { return !strncmp(d->url, "p2p://", 6); }
-typedef struct { int on, idx, tok, tries, byPlayer, yield, ahead, res, fx; double at; char url[600], key[200]; } Td; static Td TDL[NL]; /* fx: its engine fetch (p2p_fetch) */
+typedef struct { int on, idx, tok, tries, byPlayer, yield, ahead, res, fx; double at; long long lastGot; char url[600], key[200]; } Td; static Td TDL[NL]; /* fx: its engine fetch (p2p_fetch) */
 #define TD (TDL[cl])
 #define tdUrl (TDL[cl].url)
 #define tdKey (TDL[cl].key)
@@ -147,9 +147,9 @@ static int lane_of(int i) { for (int k = 0; k < NL; k++) if ((TDL[k].on && TDL[k
 static int lanes_on(void) { int n = 0; for (int k = 0; k < NL; k++) n += TDL[k].on || WK[k].busy; return n; }
 static int eng_running(void) { int n = 0; for (int i = 0; i < nd; i++) n += D[i].gid[0] && D[i].state == DL_RUNNING && !D[i].held; return n; }
 static int at_once(void);
-static void td_end(int retry) { extern int player_torrent(void); int i = TD.idx; TD.yield = 0; TD.res = 0; fprintf(stderr, "[dl] torrent lane %d free (%s)\n", cl, retry ? "again in 20 s" : "done"); TD.on = 0; TD.byPlayer = 0;
+static void td_end(int retry) { extern int player_torrent(void); int i = TD.idx; TD.yield = 0; TD.res = 0; fprintf(stderr, "[dl] torrent lane %d free (%s)\n", cl, retry ? "again in 2 s" : "done"); TD.on = 0; TD.byPlayer = 0;
   if (!px_busy_key(tdKey)) { p2p_fetch_end(TD.fx); TD.fx = 0; tdUrl[0] = 0; } /* its fetch goes (the file stays; the other lanes' and the film's stay); not while the film reads from it */
-  if (retry && i >= 0 && i < nd) { tdWait = app_now() + 20; } }
+  if (retry && i >= 0 && i < nd) { tdWait = app_now() + 2; } }
 static void td_cb_lane(const char *url, const char *err, uint64_t size) {
   int i = TD.idx; TD.res = 0; if (i < 0 || i >= nd) { TD.on = 0; return; } Dl *d = &D[i];
   if (d->state != DL_RUNNING) { td_end(0); return; } /* paused or gone while it looked for peers */
@@ -182,7 +182,7 @@ static void td_tick(void) { extern int player_torrent(void); static int tok;
     { char k2[200]; key_of(i, k2, sizeof k2); if (px_busy_key(k2)) continue; } /* (the film reads that one itself just now) */ if (i == first) tdWant[0] = 0;
     if (!p2p_available()) { d->state = DL_FAILED; toast(T("Torrents need the app\xe2\x80\x99s engine: pick a direct link"), 2600, NULL); save(); return; }
     cl = k; if (TD.idx != i) TD.tries = 0; p2p_fetch_end(TD.fx); TD.on = 1; TD.res = 1; TD.idx = i; TD.byPlayer = 0; TD.tok = ++tok; TD.at = app_now(); tdUrl[0] = 0; d->state = DL_RUNNING; d->speed = 0;
-    TD.fx = p2p_fetch(d->url, td_cb, (void *)(intptr_t)tok); cl = 0; fprintf(stderr, "[dl] torrent %s %s: finding peers (lane %d)\n", d->id, d->ep, k);
+    TD.lastGot = d->got; TD.fx = p2p_fetch(d->url, td_cb, (void *)(intptr_t)tok); cl = 0; fprintf(stderr, "[dl] torrent %s %s: finding peers (lane %d)\n", d->id, d->ep, k);
     if (!TDL[k].fx) { cl = k; td_cb_lane(NULL, T("Couldn\xe2\x80\x99t start the torrent engine"), 0); cl = 0; } return; } }
 /* a torrent downloading: "12 peers · 2.4 MB/s" (the player's line), "Finding peers…" before */
 float ph_dl_fraction(const char *id, const char *vid) { load(); int i = find(id, vid && *vid ? vid : id); if (i < 0 || !D[i].seq || D[i].size <= 0) return -1; return D[i].state == DL_DONE ? 1 : (float)((double)D[i].got / D[i].size); } /* the part on the phone, from the start */
@@ -273,6 +273,7 @@ static void notify_tick(void) { if (app_now() - notifyAt < 1.0) return; notifyAt
 static void lane_tick(void) {
   if (W.busy && W.done && (W.idx < 0 || W.idx >= nd)) { W.busy = 0; if (TD.on && TD.idx < 0) TD.on = 0; fprintf(stderr, "[dl] the worker of a removed download ended\n"); } /* (its download removed meanwhile: nothing else would let it go) */
   if (W.busy && W.idx >= 0 && W.idx < nd) { Dl *d = &D[W.idx]; int part = W.to >= 0; d->got = part ? rg_cov(d) + W.got : W.got; if (W.total > 0 && !part) d->size = W.total; int tor = TD.on && TD.idx == W.idx;
+    if (tor && d->got > TD.lastGot) { TD.lastGot = d->got; TD.at = app_now(); } /* four-minute guard is inactivity, not a total-download timeout */
     { static double wt_[NL], sp_[NL]; static long long wg_[NL]; static int wi_[NL] = { -1, -1, -1, -1, -1, -1 }; double t = app_now(); /* how fast: what came into its file, smoothed over a few seconds (a torrent comes in bursts) */
       if (wi_[cl] != W.idx) { wi_[cl] = W.idx; wt_[cl] = t; wg_[cl] = W.got; sp_[cl] = d->speed > 0 ? (double)d->speed : 0; }
       else if (t - wt_[cl] >= 0.5) { long long dg = W.got - wg_[cl]; double inst = dg > 0 ? dg / (t - wt_[cl]) : 0; sp_[cl] = sp_[cl] <= 0 ? inst : sp_[cl] * 0.8 + inst * 0.2; wt_[cl] = t; wg_[cl] = W.got; d->speed = (long long)sp_[cl]; } } /* how fast, for the page and the notification */

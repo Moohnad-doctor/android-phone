@@ -48,7 +48,23 @@ void card_at(const Item *it, float x, float y, float w, float h, int wide, int l
   int coll = !strcmp(it->type, "collection"); float hold = pressed && !coll ? app_hold_progress() : 0, r = wide ? 12 : 14; if (!pressed && press_k(x, y, w, h) > 0.2f) pressed = 1; /* (a collection: no hold's glow, it has no menu) */
   if (coll && pressed) x += app_card_shake_dx(); /* (held anyway: a short soft shake) */
   lift_begin_z(key, pressed, hold, x, y, w, h, r, 0.04f);
-  Item displayItem = phone_localized_item(it); card_draw_wh(&displayItem, x, y, w, h, wide, label, 1);
+  Item displayItem = phone_localized_item(it);
+  CardPrep prep; card_prep(&prep, &displayItem, wide, NULL);
+  /* sb_poster_of's legacy w342 downgrade softens phone-sized catalog posters.
+     Keep the card URL at TMDB w500; card_draw_prep uses this resolved URL unchanged. */
+  if (!wide) {
+    char *tmdb = strstr(prep.art, "/t/p/");
+    if (tmdb) {
+      char *size = tmdb + 5, *slash = strchr(size, '/');
+      if (slash && strncmp(size, "original", 8)) {
+        char high[sizeof prep.art];
+        snprintf(high, sizeof high, "%.*s/w500/%s", (int)(size - prep.art), prep.art, slash + 1);
+        snprintf(prep.art, sizeof prep.art, "%s", high);
+      }
+    }
+    snprintf(prep.pre, sizeof prep.pre, "%s", prep.art);
+  }
+  card_draw_prep(&displayItem, &prep, x, y, w, h, wide, label, 1);
   lift_end(key, x, y, w, h, r);
   if (hold > 0) hold_trace_draw(x, y, w, h, r, hold);
 }

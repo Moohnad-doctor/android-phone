@@ -198,13 +198,7 @@ static void hero_act(int a, int b2) { (void)b2; Board *b = me(); const Item *it 
   if (a == 1) { if (!strcmp(it->type, "series")) { DetailParams p; memset(&p, 0, sizeof p); p.it = *it; p.openStreams = 1; app_go(SCR_DETAIL, &p, 0); } else ph_streams_show(it, it->id, NULL); }
   else if (a == 2) { lib_toggle(it); toast(lib_has(it->id) ? T("Added to Library") : T("Removed from Library"), 1600, NULL); app_refresh_boards(); }
   else { b->fr = -3; b->fi = 0; app_open_item(it); } }
-static void filter_act(int a, int b2) { (void)b2; Board *b = me(); int nf = b->filter == a ? 0 : a; b->swDir = nf > b->filter ? 1 : -1; b->filter = nf; timer_start(&b->sw, 0.34f); } /* the rows slide in from the chip's side */
-static void cat_pick(int i) { Board *b = me(); if (i >= 0 && i < b->n) { scroll_to(&b->v, b->lastY[i + 2]); } /* (it glides there; the end of the page is as far as it goes) */ }
-static void cats_act(int a, int b2);
-static int fAll; /* (Series or Movies chosen: an "All" chip first, back to everything) */
-static void filter_set(int i, int b2) { (void)b2; Board *b = me(); int nf = fAll ? i : i + 1; if (nf == b->filter) return; b->swDir = nf > b->filter ? 1 : -1; b->filter = nf; timer_start(&b->sw, 0.34f); }
-static void ctx_act(int i, int b2) { if (fAll) { if (i == 0) { filter_set(0, b2); return; } i--; } if (i == 2) cats_act(0, 0); else filter_act(i + 1, b2); }
-static void cats_act(int a, int b2) { (void)a; (void)b2; Board *b = me(); const char *names[14]; static char buf[14][96]; int n = 0; for (int i = 0; i < b->n && n < 14; i++) { snprintf(buf[n], sizeof buf[n], "%s", T(b->rows[i].def.title)); names[n] = buf[n]; n++; } choices_open(T("Categories"), names, n, -1, cat_pick); }
+/* Home's former context-chip handlers were removed with the redundant Series / Movies / Categories pills. */
 
 static void enter(const void *params) { (void)params; Board *b = me(); bg_clear(); if (!b->n || b->lib != lib_version()) load(b, 0); else lib_rows(b); { extern int app_entered_by_swipe; if (app_entered_by_swipe) b->in.on = 0; else timer_start(&b->in, 0.4f); } } /* swiped back to: already in place */
 static void leave(void) {}
@@ -215,10 +209,7 @@ static void draw(void) {
   /* Home: the cover of one title across the top (under the status bar), its logo, its genres, Play and My List on it;
      Discover: its rows from the top. No wordmark: the page is the content. */
   float y = -b->v.pos; if (disc) gfx_rect(0, 0, SB_W, SB_H, disc_page()); /* the page in the shown title's colour */
-  { static Tween allT; static int seen; if (!seen) { seen = 1; tween_set(&allT, b->filter != 0); } /* the All chip: grows in beside Series when one is chosen, shrinks away (lit, as chosen) when All is */
-    tween_to(&allT, b->filter != 0 ? 1 : 0, 0.3f, EASE_WEB); tween_tick(&allT, phDt);
-    fAll = b->filter != 0 || allT.v > 0.01f; ctx_row(ctx_act); if (fAll) ctx_add_k(T("All"), b->filter == 0, allT.v); }
-  ctx_add(T("Series"), b->filter == 1); ctx_add(T("Movies"), b->filter == 2); if (b->n) ctx_add(T("Categories"), 0); ctx_slide(filter_set, fAll ? 3 : 2); ctx_scrolled(b->v.pos);
+  /* Redundant top-right Series / Movies / Categories pills removed from Home. */
   const Item *hi = disc ? NULL : hero_item(b);
   if (!disc) {
     float hh = SB_W * 0.86f + INS_T; char buf[600];
@@ -280,7 +271,8 @@ static struct {
   CatalogDef base, query;
   ItemList all, shown;
   char title[96], genre[48];
-  int year, sort, menu, busy, focus;
+  int year, sort, menu, busy, focus, pageBusy, more, skip;
+  double pageRetryAt;
   unsigned gen;
   Scroll scroll;
 } HC;
@@ -314,7 +306,31 @@ static void hc_got(ItemList *l, int cached, void *ud) {
   (void)cached;
   if ((unsigned)(uintptr_t)ud != HC.gen) { if (l) itemlist_free(l); return; }
   HC.busy = 0;
-  if (l) { itemlist_clear(&HC.all); HC.all = *l; free(l); hc_apply(); }
+  if (l) { itemlist_clear(&HC.all); HC.all = *l; free(l); HC.skip = HC.all.n; HC.more = HC.all.n > 0; HC.pageBusy = 0; hc_apply(); }
+}
+static void hc_page_got(ItemList *l, int more, void *ud) {
+  if ((unsigned)(uintptr_t)ud != HC.gen) { if (l) itemlist_free(l); return; }
+  HC.pageBusy = 0;
+  if (!l) { HC.pageRetryAt = app_now() + 2.0; return; }
+  int got = l->n, added = 0;
+  if (got > 0) {
+    Item *items = realloc(HC.all.items, (size_t)(HC.all.n + got) * sizeof(Item));
+    if (items) {
+      HC.all.items = items;
+      for (int i = 0; i < got; i++) {
+        int dup = 0;
+        for (int j = 0; j < HC.all.n && !dup; j++)
+          dup = !strcmp(HC.all.items[j].type, l->items[i].type) && !strcmp(HC.all.items[j].id, l->items[i].id);
+        if (!dup) { HC.all.items[HC.all.n++] = l->items[i]; added++; }
+      }
+    }
+  }
+  HC.skip += got;
+  /* When an addon omits hasMore, keep paging while it returns new items; stop on empty or repeated pages. */
+  HC.more = got > 0 && added > 0 && (more < 0 || more != 0);
+  if (!got) HC.more = 0;
+  HC.pageRetryAt = 0;
+  itemlist_free(l); hc_apply();
 }
 static void hc_urlenc(const char *src, char *dst, size_t cap) {
   static const char hex[] = "0123456789ABCDEF"; size_t n = 0;
@@ -326,7 +342,7 @@ static void hc_urlenc(const char *src, char *dst, size_t cap) {
   dst[n] = 0;
 }
 static void hc_query(void) {
-  HC.gen++; HC.busy = 1; HC.scroll.pos = HC.scroll.vel = HC.scroll.max = 0; HC.focus = 0;
+  HC.gen++; HC.busy = 1; HC.pageBusy = 0; HC.more = 0; HC.skip = 0; HC.pageRetryAt = 0; HC.scroll.pos = HC.scroll.vel = HC.scroll.max = 0; HC.focus = 0;
   itemlist_clear(&HC.all); itemlist_clear(&HC.shown);
   HC.query = HC.base;
   /* Replace, rather than duplicate, a genre extra already present on the source catalog. */
@@ -390,7 +406,10 @@ static void hc_draw(void) {
   float gy = gridY + 12 - HC.scroll.pos;
   float gh = poster_grid(&HC.shown, gy, hc_focus, 0, HC.focus);
   HC.scroll.max = fmaxf(0, gy + gh + HC.scroll.pos - bottom + 24);
-  if (HC.busy) spinner(SB_W / 2, gridY + 70, 20);
+  if (!HC.busy && HC.more && !HC.pageBusy && app_now() >= HC.pageRetryAt && HC.scroll.pos >= fmaxf(0, HC.scroll.max - 520)) {
+    HC.pageBusy = 1; sb_catalog_page(&HC.query, HC.skip, hc_page_got, (void *)(uintptr_t)HC.gen);
+  }
+  if (HC.busy || HC.pageBusy) spinner(SB_W / 2, HC.pageBusy ? bottom - 38 : gridY + 70, 20);
   else if (!HC.shown.n) text_draw(T("None found"), SB_W / 2, gridY + 70, F_BODY, 500, TXT2, 0, SB_W - 2 * PAD, ALIGN_CENTER);
 }
 static Screen hcLayer = { NULL, NULL, hc_key, hc_tick, hc_draw, hc_focused, hc_open_item, NULL, NULL, NULL };
