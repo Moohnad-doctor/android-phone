@@ -438,7 +438,7 @@ static const Item *q_focused(void) { return Q.fr >= 0 && Q.fr < Q.nd && Q.fi < Q
 Screen phSearch = { q_enter, q_leave, q_key, q_tick, q_draw, q_focused, NULL, q_text, NULL };
 
 /* ---- sign-in ---- */
-static struct { char email[128], pass[128]; int field, busy, errF; double errAt; char err[200]; } G; /* errF: where the error shows: 0 under Email, 1 under Password, 2 under Continue */
+static struct { char email[128], pass[128]; int field, busy, errF, reveal; double errAt; char err[200]; } G; /* errF: where the error shows: 0 under Email, 1 under Password, 2 under Continue */
 static void on_lib(int changed, void *ud) { (void)changed; (void)ud; app_refresh_boards(); }
 static void on_addons(int changed, void *ud) { (void)changed; (void)ud; }
 static void g_error(int f, const char *msg) { G.errF = f; G.errAt = app_now(); snprintf(G.err, sizeof G.err, "%s", msg); pplat_haptic_k(HK_THUD, 1); }
@@ -465,12 +465,14 @@ static float g_err_line(float x, float y, float w) { float k = ease_apply(EASE_O
   gfx_opacity_push(k); gfx_offset_push(0, -8 * (1 - k)); uint32_t c = RGB(0xff, 0x8a, 0x80); float lh = text_line_height(F_SMALL);
   gfx_circle(x + 6, y + lh / 2, 6, c); int n = text_draw_wrapped(G.err, x + 24, y, w - 24, 2, F_SMALL, 600, c, 0, ALIGN_START, lh + 4);
   gfx_offset_pop(); gfx_opacity_pop(); return n * (lh + 4) + 14; }
+static void g_reveal_act(int a, int b) { (void)a; (void)b; G.reveal = !G.reveal; pplat_haptic_k(HK_PICK, 0.5f); }
 static void g_field(float x, float y, float w, const char *value, const char *hint, int focused, int secret, int idx) {
   int bad = G.err[0] && G.errF == idx; float st = (float)(app_now() - G.errAt), sh = bad && st < 0.45f ? sinf(st * 46) * 12 * (1 - st / 0.45f) : 0; /* a little shake where it went wrong */
   gfx_offset_push(sh, 0);
   char shown[400]; if (secret) { int n = 0; for (const char *p = value; *p && n < 80; p++) if ((*p & 0xc0) != 0x80) { memcpy(shown + n * 3, "\xe2\x80\xa2", 3); n++; } shown[n * 3] = 0; } else snprintf(shown, sizeof shown, "%s", value);
   float h = 84, ty = y + h / 2 - text_line_height(F_BODY + 2) / 2.0f, tw = 0;
-  (void)shown; (void)ty; (void)tw; g_ed(); if (ted_field(idx ? &gP : &gE, x, y, w, h, F_BODY + 2, 500, TXT, hint, WHITE_A(110), focused, secret)) field2_act(idx, 0);
+  (void)shown; (void)ty; (void)tw; g_ed(); float fw = secret ? w - 72 : w; if (ted_field(idx ? &gP : &gE, x, y, fw, h, F_BODY + 2, 500, TXT, hint, WHITE_A(110), focused, secret && !G.reveal)) field2_act(idx, 0);
+  if (secret) { float ex = x + w - 34, ey = y + h / 2; gfx_ring(ex - 12, ey - 8, 24, 16, 8, 2, WHITE_A(170)); gfx_circle(ex, ey, 4, WHITE_A(190)); if (!G.reveal) gfx_rect(ex - 13, ey + 10, 28, 2, WHITE_A(190)); hit_act(x + w - 66, y, 66, h, g_reveal_act, 0, 0); }
   gfx_rect(x, y + h - 2, w, 2, WHITE_A(40)); if (bad) gfx_rect(x, y + h - 2, w, 2, RGB(0xff, 0x8a, 0x80)); else if (focused) gfx_rect(x, y + h - 2, w, 2, 0xffb794ffu);
   gfx_offset_pop(); }
 /* words you can tap, quiet */
@@ -480,23 +482,21 @@ static float g_link(float x, float y, const char *label, int px, int align, HitF
 static void kb_off_act(int a, int b) { (void)a; (void)b; phone_keyboard(0); }
 static void g_draw(void) {
   float t = (float)(app_now() - gT0), in = ease_apply(EASE_OUT, t / 0.7f);
-  gfx_rect(0, 0, SB_W, SB_H, PAGE);
-  { orbs_step(&gOrbs, app_dt(), 0, 1, 2.2f); Orbs w = gOrbs; for (int i = 0; i < 2; i++) { float ph = i * 2.1f; w.p[i][0] += sinf(t * 0.55f + ph) * SB_W * 0.07f; w.p[i][1] += cosf(t * 0.43f + ph * 1.3f) * SB_H * 0.05f; } /* the start screen's glows, drifting on */
-    uint32_t sv[4] = { ACC, ACC2, ACC3, ACC_D }; ACC = 0xff8c5cffu; ACC2 = 0xffb794ffu; ACC3 = 0xffc9b8ffu; ACC_D = 0xff5b34e6u; orbs_draw(&w, 1); ACC = sv[0]; ACC2 = sv[1]; ACC3 = sv[2]; ACC_D = sv[3]; }
-  ph_glass_grab_liquid(); /* the glows under the mark's glass */
+  gfx_rect(0, 0, SB_W, SB_H, 0xff000000u);
+  ph_glass_grab_liquid(); /* OLED black under the liquid-glass card */
   int typing = SDL_IsTextInputActive(); float X = PAD + 8, W = SB_W - 2 * X;
   if (typing) hit_act(0, 0, SB_W, SB_H, kb_off_act, 0, 0); /* a tap outside the fields: the keyboard goes */
   float kb = clampf(KB_H / (SB_H * 0.3f), 0, 1), y = INS_T + SB_H * 0.1f * (1 - kb) + 24 * kb; /* the keyboard up: the mark goes to the top, still there */
   gfx_opacity_push(in);
   /* the mark: the play sign and the name on a bubble of the bar's liquid glass, hugging them */
-  { float h = 92, ic = 52, tw = text_width("ORIGIN", 30, 800, 12), w = 30 + ic + 18 + tw + 30 - 12, x = X - 6; gfx_offset_push(0, 16 * (1 - in));
+  { float h = 92, ic = 52, tw = text_width("myth", 30, 800, 2), w = 30 + ic + 18 + tw + 30 - 12, x = X - 6; gfx_offset_push(0, 16 * (1 - in));
     ph_liquid_bubble(x, y, w, h, h / 2, 0);
     gfx_rrect_v(x + 30, y + (h - ic) / 2, ic, ic, ic / 2, RGB(0x6a, 0x45, 0xe0), RGB(0x2f, 0x1a, 0x9e)); { float S = ic * 512 / 264.0f, cx = x + 30 + ic / 2, cy = y + h / 2; icon_draw("o_play", cx - S * 256 / 512, cy - S * 226 / 512, S, WHITE_A(255)); }
-    text_draw("ORIGIN", x + 30 + ic + 18, y + h / 2 - text_line_height(30) / 2.0f, 30, 800, WHITE_A(250), 12, 0, ALIGN_LEFT); gfx_offset_pop(); y += h + SB_H * 0.07f * (1 - kb) + 36 * kb;
+    text_draw("myth", x + 30 + ic + 18, y + h / 2 - text_line_height(30) / 2.0f, 30, 800, WHITE_A(250), 2, 0, ALIGN_LEFT); gfx_offset_pop(); y += h + SB_H * 0.07f * (1 - kb) + 36 * kb;
     if (KB_H > 0) { float need = 96 + 84 + 108 + 128 + 84 + (G.err[0] ? 60 : 0), over = y + need - (SB_H - KB_H - 24); if (over > 0) y -= over; } } /* the rest above the keyboard (under the mark if it must) */
   { float k = ease_apply(EASE_OUT, (t - 0.08f) / 0.7f); gfx_offset_push(0, 22 * (1 - k));
     text_draw(T("Sign in"), X, y, 76, 800, WHITE_A(255), -2.2f, W, ALIGN_START); y += 96;
-    text_draw(T("Use your Stremio account"), X, y, F_BODY, 500, TXT2, 0, W, ALIGN_START); y += 84; gfx_offset_pop(); }
+    text_draw(T("Email and password"), X, y, F_BODY, 500, TXT2, 0, W, ALIGN_START); y += 84; gfx_offset_pop(); }
   { float k = ease_apply(EASE_OUT, (t - 0.16f) / 0.7f); gfx_offset_push(0, 22 * (1 - k));
     static float rm[2] = { 24, 44 }; float er = 12 + text_line_height(F_SMALL) + 4 + 14; /* the room under a field opens for its error, smoothly */
     for (int i = 0; i < 2; i++) { float tg = G.err[0] && G.errF == i ? er + (i ? 20 : 0) : (i ? 44 : 24); rm[i] += (tg - rm[i]) * clampf(phDt * 16, 0, 1); }
@@ -505,15 +505,14 @@ static void g_draw(void) {
     /* Sign in: a pill hugging its words, at the end of the line; Forgot password at its start */
     { int ok = G.email[0] && G.pass[0]; const char *lb = G.busy ? T("Signing in…") : T("Continue"); float h = 84, tw = text_width(lb, F_BODY + 1, 750, 0), w = 40 + tw + 14 + 30 + 34, x = X + W - w; float pk = press_k(x, y, w, h);
       gfx_scale_push(1 - 0.04f * pk, 1 - 0.04f * pk, x + w / 2, y + h / 2);
-      ph_liquid_bubble(x, y, w, h, h / 2, pk); if (ok) gfx_rrect(x, y, w, h, h / 2, col_alpha(0xff7a4cf5u, 0.5f)); /* the bar's glass; lit, the accent inside it, as the bar's lit pills */
+      ph_liquid_bubble(x, y, w, h, h / 2, pk); if (ok) gfx_rrect(x, y, w, h, h / 2, WHITE_A(24)); /* the bar's glass; lit, the accent inside it, as the bar's lit pills */
       text_draw(lb, x + 40, y + h / 2 - text_line_height(F_BODY + 1) / 2.0f, F_BODY + 1, 750, WHITE_A(ok ? 255 : 140), 0, 0, ALIGN_LEFT);
       if (G.busy) spinner(x + w - 34 - 15, y + h / 2, 13); else icon_draw("ph_chev", x + w - 34 - 30, y + h / 2 - 15, 30, WHITE_A(ok ? 255 : 140));
       gfx_scale_pop(); hit_act(x, y, w, h, go_act, 0, 0);
       g_link(X, y + 12, T("Forgot password?"), F_SMALL, ALIGN_START, link_act, 1);
       if (G.err[0] && G.errF == 2) g_err_line(X, y + h + 24, W); }
     gfx_offset_pop(); }
-  if (!typing) { float ly = SB_H - INS_B - 60 - 36; gfx_rect(X, ly - 22, W, 1, WHITE_A(22));
-    g_link(X, ly, T("Create account"), F_SMALL, ALIGN_START, link_act, 0); g_link(X + W, ly, T("Not now"), F_SMALL, ALIGN_END, go_act, 1); }
+  /* Only the real email/password flow is offered here; no guest or fake in-app registration action. */
   gfx_opacity_pop();
 }
 static int g_key(int k) { char *f = G.field ? G.pass : G.email;
