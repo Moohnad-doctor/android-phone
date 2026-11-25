@@ -103,6 +103,7 @@ int ph_dl_group_is_coll(const Dl *d);
 int  ph_dl_choosing(int *done, int *total, int *finished); /* a series: the sheet to pick seasons and episodes */
 int  ph_dl_count(void); const Dl *ph_dl_get(int i); int ph_dl_active(void);
 int  ph_dl_state(const char *id, const char *vid, float *prog);     /* -1 none, else DL_* */
+int  ph_dl_watch_info(const Dl *d, double *position, double *duration); /* saved offline playback time, seconds */
 void ph_dl_retry(int i); void ph_dl_tick(void); void ph_dl_remove(int i); void ph_dl_pause(int i); void ph_dl_play(int i);
 void ph_streams_download(const Item *it, const char *vid, const char *ep); /* the streams sheet, a pick downloads */
 void ph_fly(const char *poster, int slot);  /* a poster flies from the finger to a place of the bar (2 Library, 3 Downloads) */         /* when the last finger touched: a sheet opened under a finger skips its lift */  /* the dim, the panel, its handle; returns the panel's top */
