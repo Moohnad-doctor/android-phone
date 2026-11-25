@@ -248,7 +248,7 @@ static void fmt_left(long long left, char *eta, size_t cap) { char m[16]; if (le
    line each; the show's logo on its tile; once a second; gone when nothing downloads any more */
 static double notifyAt; static void notify_now(void) { notifyAt = -9; } /* (a download just added: said at once, "finding a stream" too) */
 static void notify_tick(void) { if (app_now() - notifyAt < 1.0) return; notifyAt = app_now();
-  int run = 0, wait = 0, one = -1, act = 0; long long got = 0, size = 0, spd = 0; char lines[1200] = ""; size_t L = 0;
+  int run = 0, one = -1, act = 0; long long got = 0, size = 0, spd = 0; char lines[1200] = ""; size_t L = 0;
   for (int i = 0; i < nd; i++) { Dl *d = &D[i]; int on = d->state == DL_RUNNING, w = d->state == DL_QUEUED || d->state == DL_CHOOSING; if (!on && !w) continue; act++; if (one < 0 || (on && D[one].state != DL_RUNNING)) one = i;
     if (on) { run++; got += d->got; size += d->size; spd += d->speed; }
     if (L < sizeof lines - 200) { char ep[32]; ep_short(d, ep, sizeof ep); char st[96]; if (on && d->size > 0) { char a1[24], b1[24]; if (d->size >= 1000000000) { snprintf(a1, sizeof a1, "%.1f", d->got / 1e9); snprintf(b1, sizeof b1, "%.1f GB", d->size / 1e9); } else { snprintf(a1, sizeof a1, "%.0f", d->got / 1e6); snprintf(b1, sizeof b1, "%.0f MB", d->size / 1e6); } snprintf(st, sizeof st, "%d%%  (%s / %s)", (int)(100.0 * d->got / d->size), a1, b1); } else snprintf(st, sizeof st, "%s", d->state == DL_CHOOSING ? T("Finding a stream") : T("Waiting"));
@@ -400,7 +400,7 @@ static void sv_update(void) { extern int player_open(void); pthread_mutex_lock(&
       memcpy(SV[k].rg, d->rg, sizeof d->rg); SV[k].nrg = d->nrg; if (w && w->busy && w->idx == i && w->to >= 0 && w->got > 0 && SV[k].nrg < 24) { SV[k].rg[SV[k].nrg][0] = w->from; SV[k].rg[SV[k].nrg][1] = w->from + w->got; SV[k].nrg++; } SV[k].wr = 1; }
     else { SV[k].rg[0][0] = 0; SV[k].rg[0][1] = d->got; SV[k].nrg = d->got > 0; SV[k].wr = 0; } /* (a link's download: in order, from the start) */
     SV[k].got = d->got; if (d->size > 0) SV[k].size = d->size; SV[k].done = d->state == DL_DONE; if (d->file[0]) snprintf(SV[k].path, sizeof SV[k].path, "%s", d->file);
-    if (is_p2p(d)) { char k2[200]; snprintf(k2, sizeof k2, "%s|%s", d->id, d->vid); const char *lu = ""; for (int q = 0; q < NL; q++) if (TDL[q].url[0] && !strcmp(k2, TDL[q].key)) lu = TDL[q].url; snprintf(SV[k].up, sizeof SV[k].up, "%s", SV[k].tee && SV[k].teeUp[0] ? SV[k].teeUp : lu); } else snprintf(SV[k].up, sizeof SV[k].up, "%s", !strncmp(d->url, "http", 4) ? d->url : ""); } pthread_mutex_unlock(&svMu); }
+    if (is_p2p(d)) { char k2[200]; snprintf(k2, sizeof k2, "%s|%s", d->id, d->vid); const char *lu = ""; for (int q = 0; q < NL; q++) { if (TDL[q].url[0] && !strcmp(k2, TDL[q].key)) lu = TDL[q].url; } snprintf(SV[k].up, sizeof SV[k].up, "%s", SV[k].tee && SV[k].teeUp[0] ? SV[k].teeUp : lu); } else snprintf(SV[k].up, sizeof SV[k].up, "%s", !strncmp(d->url, "http", 4) ? d->url : ""); } pthread_mutex_unlock(&svMu); }
 static int px_busy_key(const char *key) { if (!px_busy() || !key || !key[0]) return 0; int k = pxK; if (k < 0 || k >= 4) return 0; char k2[200]; pthread_mutex_lock(&svMu); snprintf(k2, sizeof k2, "%s|%s", SV[k].id, SV[k].vid); pthread_mutex_unlock(&svMu); return !strcmp(k2, key); }
 /* a part not here yet: from its source to the player, written into the file on the way (a torrent's) */
 typedef struct { int c, ok, k, wr; long long at, mark; FILE *f; int chk; } Px;
