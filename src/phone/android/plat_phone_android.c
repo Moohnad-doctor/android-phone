@@ -53,7 +53,7 @@ void plat_pre_init(const char *appId) { (void)appId;
     JNIEnv *e = env(); jmethodID m = sm(e, "internalFilesDir", "()Ljava/lang/String;");
     if (m) jstr_copy(e, (*e)->CallStaticObjectMethod(e, cls(e), m), dataDir, sizeof dataDir);
   }
-  if (!dataDir[0]) { fprintf(stderr, "[p2p] Android app-private files directory is unavailable\\n"); abort(); }
+  if (!dataDir[0]) { fprintf(stderr, "[p2p] Android app-private files directory is unavailable\n"); abort(); }
   snprintf(assetDir, sizeof assetDir, "%s/assets", dataDir);
   applog_start(dataDir);
   SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight Portrait PortraitUpsideDown"); /* every way round: the pages lay out for the shape they get; films turn sideways in the player */
