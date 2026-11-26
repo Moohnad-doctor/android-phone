@@ -442,7 +442,12 @@ static int file_junk(const char *path) {
 static int pick_file(const sbe_file *f, int n, int want) {
   int hasFull = 0;
   for (int i = 0; i < n; i++) if (is_video(f[i].path) && !file_junk(f[i].path) && f[i].size >= 90ull * 1024 * 1024) hasFull = 1;
-  if (want >= 0 && want < n && is_video(f[want].path) && !file_junk(f[want].path) && (!hasFull || f[want].size >= 90ull * 1024 * 1024)) return want;
+  /* An explicit file index is a contract: never substitute another episode when it is absent or junk. */
+  if (want >= 0) {
+    if (want >= n || !is_video(f[want].path) || file_junk(f[want].path) ||
+        (hasFull && f[want].size < 90ull * 1024 * 1024)) return -1;
+    return want;
+  }
   int best = -1; uint64_t mx = 0;
   for (int i = 0; i < n; i++) { if (!is_video(f[i].path) || file_junk(f[i].path) || (hasFull && f[i].size < 90ull * 1024 * 1024)) continue;
     if (best < 0 || f[i].size > mx) { mx = f[i].size; best = i; } }

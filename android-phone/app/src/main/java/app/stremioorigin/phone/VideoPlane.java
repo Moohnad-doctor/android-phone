@@ -70,6 +70,22 @@ public final class VideoPlane {
     }
     private static void run(Runnable r) { if (Looper.myLooper() == Looper.getMainLooper()) r.run(); else ui.post(r); }
 
+    /* Embedded tracks are considered only while no external subtitle has been selected. */
+    private static void autoSelectEmbeddedSubtitle() {
+        if (player == null || spuWanted != -2 || player.getSpuTrack() != -1) return;
+        MediaPlayer.TrackDescription[] tracks = player.getSpuTracks();
+        if (tracks == null || tracks.length == 0) return;
+        int arabic = -1, english = -1;
+        for (MediaPlayer.TrackDescription track : tracks) {
+            if (track == null || track.id < 0 || track.name == null) continue;
+            String name = track.name.toLowerCase(java.util.Locale.ROOT);
+            if (arabic < 0 && (name.contains("arabic") || name.contains("العربية") || name.matches(".*\\\\b(ar|ara)\\\\b.*") || name.contains("[ar]"))) arabic = track.id;
+            if (english < 0 && (name.contains("english") || name.matches(".*\\\\b(en|eng)\\\\b.*") || name.contains("[en]"))) english = track.id;
+        }
+        int selected = arabic >= 0 ? arabic : english;
+        if (selected >= 0) { player.setSpuTrack(selected); android.util.Log.i("StremioOrigin", "[subs] selected embedded " + (arabic >= 0 ? "Arabic" : "English") + " track " + selected); }
+    }
+
     private static void ensure() {
         MainActivity a = MainActivity.self;
         if (a == null) return; if (vlc != null) { if (player == null) fresh(); return; } /* (made once; after a stream was let go, only a new player) */
@@ -83,7 +99,7 @@ public final class VideoPlane {
         events = ev -> {
             switch (ev.type) {
                 case MediaPlayer.Event.Opening: state = 1; break;
-                case MediaPlayer.Event.Playing: state = 2; MainActivity.vPipUpdate(); if (spuWanted == -2 && player.getSpuTrack() != -1) player.setSpuTrack(-1); break;
+                case MediaPlayer.Event.Playing: state = 2; MainActivity.vPipUpdate(); if (spuWanted == -2 && player.getSpuTrack() == -1) autoSelectEmbeddedSubtitle(); break;
                 case MediaPlayer.Event.Paused: state = 3; MainActivity.vPipUpdate(); break;
                 case MediaPlayer.Event.Buffering: buffering = ev.getBuffering(); break; /* it says this all the time while playing: a real wait is the time not moving (the native side sees it) */
                 case MediaPlayer.Event.EndReached: android.util.Log.i("StremioOrigin", "[video] end reached at " + pos + " of " + dur); state = 5; break;
@@ -93,7 +109,7 @@ public final class VideoPlane {
                 case MediaPlayer.Event.TimeChanged: pos = ev.getTimeChanged(); posAt = System.nanoTime(); if (live == 0 && pos > 0) live = 1; if (vw <= 0 && !"fit".equals(sizeMode)) applySize(); break;
                 case MediaPlayer.Event.LengthChanged: dur = ev.getLengthChanged(); break;
                 case MediaPlayer.Event.Vout: vouts = ev.getVoutCount(); if (vouts > 0) { live = 1; vw = vh = 0; applySize(); } break;
-                case MediaPlayer.Event.ESAdded: case MediaPlayer.Event.ESSelected: if (spuWanted == -2 && player.getSpuTrack() != -1) player.setSpuTrack(-1); if (!swDecode && legacyVideo()) { swDecode = true; final long at = pos; android.util.Log.i("StremioOrigin", "[video] an old video codec: decoded in software"); ui.post(() -> reopen(at)); } break; /* the file's subtitles stay off until the player asks (it shows its own) */
+                case MediaPlayer.Event.ESAdded: case MediaPlayer.Event.ESSelected: if (spuWanted == -2 && player.getSpuTrack() == -1) autoSelectEmbeddedSubtitle(); if (!swDecode && legacyVideo()) { swDecode = true; final long at = pos; android.util.Log.i("StremioOrigin", "[video] an old video codec: decoded in software"); ui.post(() -> reopen(at)); } break; /* the file's subtitles stay off until the player asks (it shows its own) */
                 default: break;
             }
         };
