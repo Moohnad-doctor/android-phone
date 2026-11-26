@@ -20,6 +20,7 @@
 #include "core/keys.h"
 #include "core/video.h"
 #include "core/applog.h"
+#include "core/store.h"
 #include <SDL2/SDL_timer.h>
 #include "phone/phone.h"
 
@@ -149,7 +150,8 @@ static jmethodID vm(const char *name, const char *sig) { return sm(env(), name, 
 static struct { long long st, pos, dur, buf, w, h, live; int stuck; } V; static char vErr[96]; static int surfW = 1, surfH = 1, vHasMedia; static double seekTo = -1; static Uint32 seekAt;
 static void vcall(const char *name) { JNIEnv *e = env(); jmethodID m = vm(name, "()V"); if (m) (*e)->CallStaticVoidMethod(e, cls(e), m); }
 int video_init(const char *appId) { (void)appId; return 1; }
-void video_load(const char *url) { fprintf(stderr, "[video] load %.160s\n", url); JNIEnv *e = env(); jmethodID m = vm("vLoad", "(Ljava/lang/String;Ljava/lang/String;J)V"); if (!m) return;
+void pplat_video_anime_settings(int enabled, int sharpen, int color_boost) { JNIEnv *e = env(); jmethodID m = vm("vAnime", "(ZZZ)V"); if (m) (*e)->CallStaticVoidMethod(e, cls(e), m, (jboolean)(enabled != 0), (jboolean)(sharpen != 0), (jboolean)(color_boost != 0)); }
+void video_load(const char *url) { fprintf(stderr, "[video] load %.160s\n", url); pplat_video_anime_settings(store_bool("anime_enhance_enabled", 0), store_bool("anime_sharpen", 1), store_bool("anime_color_boost", 1)); JNIEnv *e = env(); jmethodID m = vm("vLoad", "(Ljava/lang/String;Ljava/lang/String;J)V"); if (!m) return;
   const char *h = ""; /* a stream's own headers go through the app's local proxy (core/hproxy.c), as on the TV */
   jstring a = js(e, url), b = js(e, h); (*e)->CallStaticVoidMethod(e, cls(e), m, a, b, (jlong)0); (*e)->DeleteLocalRef(e, a); (*e)->DeleteLocalRef(e, b);
   memset(&V, 0, sizeof V); V.st = 1; vErr[0] = 0; vHasMedia = 1; seekTo = -1; }

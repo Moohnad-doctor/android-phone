@@ -357,6 +357,7 @@ public class MainActivity extends SDLActivity {
     }
 
     /* the video plane, for the native player (found through this class: the native thread sees the app's classes from here) */
+    public static void vAnime(boolean enabled, boolean sharpen, boolean colorBoost) { VideoPlane.setAnimeEnhancement(enabled, sharpen, colorBoost); }
     public static void vLoad(String url, String headers, long startMs) { VideoPlane.load(url, headers, startMs); }
     public static void vRate(float r) { VideoPlane.rate(r); }
     public static void vAspect(String a, float scale) { VideoPlane.aspect(a, scale); }

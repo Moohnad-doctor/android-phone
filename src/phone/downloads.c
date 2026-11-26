@@ -468,7 +468,26 @@ void ph_dl_play(int i) { load(); if (i < 0 || i >= nd || D[i].state != DL_DONE) 
 static Item qIt; static int qIdx[MAXQ], qN, qAt, qBusy;
 static void q_next(void);
 static void on_best_status(const char *t, void *ud) { (void)t; (void)ud; }
-static void on_best_done(const Stream *s, const BestRate *r, void *ud) { (void)r; (void)ud; int i = qAt > 0 ? qIdx[qAt - 1] : -1; qBusy = 0;
+static Stream dlFallback; static double dlFallbackScore;
+static void dl_fallback_part(StreamGroup *g, int gi, void *ud) {
+  (void)gi; (void)ud; if (!g) return;
+  for (int k = 0; k < g->n; k++) { const Stream *s = &g->items[k]; if (!s->url[0]) continue;
+    if (s->p2p ? !p2p_available() : strncmp(s->url, "http", 4) != 0) continue;
+    char info[2048]; best_stream_info(s, info, sizeof info); const char *r = best_res_of(info); int px = r && *r ? atoi(r) : 0;
+    double score = px == 1080 ? 300 : px == 720 ? 220 : px > 1080 ? 120 : px > 0 ? 80 : 180;
+    score += s->p2p ? 0 : 25; if (s->size > 90.0 * 1024 * 1024) score += 8;
+    if (!dlFallback.url[0] || score > dlFallbackScore) { dlFallback = *s; dlFallbackScore = score; }
+  } free(g->items);
+}
+static void dl_fallback_done(int total, void *ud) {
+  (void)total; int i = (int)(intptr_t)ud; qBusy = 0;
+  if (i >= 0 && i < nd && D[i].state == DL_CHOOSING) {
+    if (!dlFallback.url[0]) D[i].state = DL_NOSTREAM;
+    else { snprintf(D[i].url, sizeof D[i].url, "%s", dlFallback.url); info_of(&dlFallback, D[i].info, sizeof D[i].info); D[i].size = dlFallback.size > 0 ? (long long)dlFallback.size : 0; D[i].state = DL_QUEUED; }
+    save();
+  } q_next();
+}
+static void on_best_done(const Stream *s, const BestRate *r, void *ud) { (void)r; (void)ud; int i = qAt > 0 ? qIdx[qAt - 1] : -1; if (!s && i >= 0 && i < nd && D[i].state == DL_CHOOSING) { memset(&dlFallback, 0, sizeof dlFallback); dlFallbackScore = -1e9; sb_streams(D[i].type, D[i].vid, dl_fallback_part, dl_fallback_done, (void *)(intptr_t)i); return; } qBusy = 0;
   if (i >= 0 && i < nd && D[i].state == DL_CHOOSING) {
     if (!s || (s->p2p ? !p2p_available() : strncmp(s->url, "http", 4) != 0)) { D[i].state = DL_NOSTREAM; }
     else { int dup = -1; for (int j = 0; j < nd; j++) if (j != i && !strcmp(D[j].url, s->url)) dup = j; /* the same file as another: a pack, kept once */
@@ -479,7 +498,7 @@ static void on_best_done(const Stream *s, const BestRate *r, void *ud) { (void)r
 static void q_next(void) {
   if (qBusy) return; while (qAt < qN && (qIdx[qAt] >= nd || D[qIdx[qAt]].state != DL_CHOOSING)) qAt++;
   if (qAt >= qN) { qN = qAt = 0; return; }
-  int i = qIdx[qAt++]; qBusy = 1; { double mb; int res, hdr; ph_dl_prefs(&mb, &res, &hdr); best_cap_next(mb); best_limits_next(res, hdr); best_for_download_next(); } /* the settings' profile (or their own choices): its size an hour, its picture */
+  int i = qIdx[qAt++]; qBusy = 1; { double mb; int res, hdr; ph_dl_prefs(&mb, &res, &hdr); (void)res; (void)hdr; best_cap_next(mb); best_limits_next(0, 0, -1); best_for_download_next(); } /* the settings' profile (or their own choices): its size an hour, its picture */
   best_choose(D[i].type, D[i].vid, strcmp(D[i].type, "series") ? 100 : 45, on_best_status, on_best_done, NULL); }
 static void q_push(int i) { if (qN < MAXQ) qIdx[qN++] = i; }
 int ph_dl_choosing(int *done, int *total, int *finished) { if (done) *done = qAt; if (total) *total = qN; if (finished) *finished = 0; return qN > 0; }

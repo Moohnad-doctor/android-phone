@@ -277,11 +277,13 @@ void card_standin(const Item *it, float x, float y, float w, float h, float r, i
   unsigned hh = 2166136261u; for (const char *p = it->name; *p; p++) hh = (hh ^ (unsigned char)*p) * 16777619u;
   uint32_t nc = hsl2rgb((float)(hh % 360), 0.38f, 0.26f), nd = hsl2rgb((float)((hh / 360) % 360), 0.30f, 0.12f);
   gfx_rrect_v(x, y, w, h, r, nc | 0xff000000u, nd | 0xff000000u); /* (the colour first: under the backdrop while it comes, and when there is none) */
-  char b[512]; const char *bg = wide ? sb_poster_of(it, b, sizeof b) : sb_bg_small(it, b, sizeof b); /* (a poster's stand-in: its backdrop; wide art's: its poster) */
+  char b[512]; const char *bg = wide ? sb_poster_of(it, b, sizeof b) : NULL; /* a failed poster uses the clean gradient, never a stretched low-resolution backdrop */
   if (bg && *bg && !img_shaped_failed(bg, (int)w, (int)h, r, 1)) { GLuint t = img_get_shaped(bg, (int)w, (int)h, r, 1); if (t) ph_picture(t, x, y, w, h, r, WHITE_A(170)); }
-  gfx_rrect_v(x, y + h * 0.35f, w, h * 0.65f, r, BLACK_A(0), BLACK_A(200));
-  const char *nm = it->name[0] ? it->name : it->id; float px = w < 300 ? 18 : 24, lh = (w < 300 ? 26 : 30) * 1.25f; int fs = w < 300 ? 26 : 30, nl = text_wrap_count(nm, w - 2 * px, 4, fs, 800, -0.3f); if (nl < 1) nl = 1;
-  text_draw_wrapped(nm, app_rtl() ? x + w - px : x + px, y + h - px - foot - nl * lh, w - 2 * px, 4, fs, 800, WHITE_A(245), -0.3f, ALIGN_START, lh);
+  if (foot >= 0) {
+    gfx_rrect_v(x, y + h * 0.35f, w, h * 0.65f, r, BLACK_A(0), BLACK_A(200));
+    const char *nm = it->name[0] ? it->name : it->id; float px = w < 300 ? 18 : 24, lh = (w < 300 ? 26 : 30) * 1.25f; int fs = w < 300 ? 26 : 30, nl = text_wrap_count(nm, w - 2 * px, 4, fs, 800, -0.3f); if (nl < 1) nl = 1;
+    text_draw_wrapped(nm, app_rtl() ? x + w - px : x + px, y + h - px - foot - nl * lh, w - 2 * px, 4, fs, 800, WHITE_A(245), -0.3f, ALIGN_START, lh);
+  }
   gfx_ring(x, y, w, h, r, 1, WHITE_A(22));
 }
 /* the Live now band's last card: All channels, a quiet glass tile with the live mark and its words */
@@ -289,10 +291,12 @@ static void allch_tile(float x, float y, float w, float h) { livewall_card(x, y,
 static int card_body(const Item *it, const CardPrep *cp, float x, float y, float w, float h, int wide, int label, int loadArt) {
   int shown; CardPrep own;
   if (!strcmp(it->id, LIVE_ALL_ID)) { allch_tile(x, y, w, h); return 1; }
+  int clean = label < 0; if (clean) label = 0;
   if (!cp) { card_prep(&own, it, wide, NULL); cp = &own; } /* a card without its own: resolved here, as before */
   card_art(cp->art, x, y, w, h, CARD_R, wide, loadArt, &shown);
   gfx_clip_push(x, y, w, h);
-  if (shown < 0) { gfx_clip_pop(); card_standin(it, x, y, w, h, CARD_R, wide, 0); gfx_clip_push(x, y, w, h); } /* the art failed: its stand-in, never an empty card */
+  if (shown < 0) { gfx_clip_pop(); card_standin(it, x, y, w, h, CARD_R, wide, clean ? -1 : 0); gfx_clip_push(x, y, w, h); } /* the art failed: its stand-in, never an empty card */
+  if (!clean) {
   if (label && !wide) { float lh = text_line_height(25), gh = 34 + lh + 13; gfx_rrect_v(x, y + h - gh, w, gh, 0, BLACK_A(0), BLACK_A(235)); text_draw(it->name, app_rtl() ? x + w - 15 : x + 15, y + h - 13 - lh, 25, 600, WHITE_A(255), 0, w - 30, ALIGN_START); }
   /* on a poster: watched, a disc with a check, always in the top corner; saved to the Library (not on the Library's own
      page) a disc of the same make with a bookmark, beside it: the accent lit from above, a fine light edge, a soft
@@ -344,6 +348,7 @@ static int card_body(const Item *it, const CardPrep *cp, float x, float y, float
  WHITE_A(255), 0.2f, 0, ALIGN_LEFT); }
     if (it->progress > 0) { float bw = w - 28, pw = bw * (it->progress > 1 ? 1 : it->progress); /* inset and rounded, never edge to edge; the accent a touch lighter */
       gfx_rrect(x + 14, y + h - 13 - 6, bw, 6, 3, WHITE_A(61)); if (pw >= 1) gfx_rrect(app_rtl() ? x + 14 + bw - pw : x + 14, y + h - 13 - 6, pw, 6, 3, col_mix(ACC, 0xffffffffu, 0.2f)); }
+  }
   }
   gfx_clip_pop();
   return shown;

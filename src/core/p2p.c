@@ -426,13 +426,31 @@ const char *p2p_status(void) { return R.on ? R.status : ""; }
 
 static int is_video(const char *n) { const char *d = strrchr(n, '.'); if (!d) return 0; static const char *ext[] = { ".mp4", ".mkv", ".avi", ".ts", ".m4v", ".webm", ".mov" };
   for (unsigned i = 0; i < sizeof ext / sizeof *ext; i++) if (!strcasecmp(d, ext[i])) return 1; return 0; }
-/* the requested file when it is a video, else the largest video, else the largest file */
+/* Torrent packs: ignore sample/OP/ED/PV/trailer extras and tiny clips when a full episode exists. */
+static int file_token(const char *s, const char *word) {
+  size_t n = strlen(word); for (const char *p = s; (p = strstr(p, word)); p++) {
+    if ((p == s || !isalnum((unsigned char)p[-1])) && !isalnum((unsigned char)p[n])) return 1;
+  } return 0;
+}
+static int file_junk(const char *path) {
+  char s[1024]; size_t n = strlen(path); if (n >= sizeof s) n = sizeof s - 1;
+  for (size_t i = 0; i < n; i++) { unsigned char c = (unsigned char)path[i]; s[i] = (char)(c >= 'A' && c <= 'Z' ? c + 32 : c); } s[n] = 0;
+  static const char *bad[] = { "sample", "ncop", "nced", "creditless", "trailer", "special", "menu", "preview", NULL };
+  for (int i = 0; bad[i]; i++) if (strstr(s, bad[i])) return 1;
+  return file_token(s, "pv") || file_token(s, "op") || file_token(s, "ed");
+}
 static int pick_file(const sbe_file *f, int n, int want) {
-  if (want >= 0 && want < n && is_video(f[want].path)) return want;
-  if (want >= 0) { int nv = 0; for (int i = 0; i < n; i++) nv += is_video(f[i].path); if (nv > 1) return -1; } /* a pack without the file asked for: never another episode in its place */
-  int best = -1; uint64_t mx = 0; for (int i = 0; i < n; i++) if (is_video(f[i].path) && f[i].size > mx) { mx = f[i].size; best = i; }
-  if (best >= 0) return best;
-  best = 0; mx = 0; for (int i = 0; i < n; i++) if (f[i].size > mx) { mx = f[i].size; best = i; }
+  int hasFull = 0;
+  for (int i = 0; i < n; i++) if (is_video(f[i].path) && !file_junk(f[i].path) && f[i].size >= 90ull * 1024 * 1024) hasFull = 1;
+  /* An explicit file index is a contract: never substitute another episode when it is absent or junk. */
+  if (want >= 0) {
+    if (want >= n || !is_video(f[want].path) || file_junk(f[want].path) ||
+        (hasFull && f[want].size < 90ull * 1024 * 1024)) return -1;
+    return want;
+  }
+  int best = -1; uint64_t mx = 0;
+  for (int i = 0; i < n; i++) { if (!is_video(f[i].path) || file_junk(f[i].path) || (hasFull && f[i].size < 90ull * 1024 * 1024)) continue;
+    if (best < 0 || f[i].size > mx) { mx = f[i].size; best = i; } }
   return best;
 }
 static void fmt_rate(double b, char *o, size_t n) { char v[16];

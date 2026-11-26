@@ -28,6 +28,18 @@ typedef struct { int sn, first, n; } Season;
 static struct { DetailParams p; Item it; cJSON *meta; int gotMeta, openStreams; unsigned gen; Ep *eps; int ne; Season seasons[64]; int ns, cur; int tab; ItemList sim; int simGot; Scroll v, sv, fv; char genres[200], facts[2][120]; char cast[CASTN][96]; char face[CASTN][512]; char faceId[CASTN][16]; char role[CASTN][96]; int tid[CASTN]; int ncast, faceGot, credOn, faceAsked; double castAt; Rating rate; int rateGot; int descOpen; int *watched; int fi; Timer1 in; } D;
 
 static int cmp_ep(const void *a, const void *b) { const Ep *x = a, *y = b; if ((x->sn == 0) != (y->sn == 0)) return x->sn == 0 ? 1 : -1; if (x->sn != y->sn) return x->sn - y->sn; return x->ep - y->ep; }
+static void detail_backdrop_url(const char *src, char *out, size_t cap) {
+  if (!cap) return;
+  snprintf(out, cap, "%s", src ? src : "");
+  if (strstr(out, "images.metahub.space/background/")) {
+    char *p = strstr(out, "/background/small/");
+    if (p) memcpy(p, "/background/large/", 18);
+    else if ((p = strstr(out, "/background/medium/")) != NULL) { memmove(p + 18, p + 19, strlen(p + 19) + 1); memcpy(p, "/background/large/", 18); }
+  } else if ((strstr(out, "image.tmdb.org/t/p/")) != NULL) {
+    char *p = strstr(out, "image.tmdb.org/t/p/") + strlen("image.tmdb.org/t/p/"), *slash = strchr(p, '/');
+    if (slash && strncmp(p, "original", 8) && strncmp(p, "w1280", 5)) { char tail[512]; snprintf(tail, sizeof tail, "%s", slash); snprintf(p, cap - (size_t)(p - out), "w1280%s", tail); }
+  }
+}
 static int is_series(void) { return D.ne > 0; }
 /* the watched marks, one per episode as shown (sorted): the library's flags are per the addon's own order of videos */
 static int *watched_map(void) { const cJSON *vs = js_arr(D.meta, "videos"); int n = cJSON_GetArraySize(vs); if (n <= 0 || !D.ne) return NULL;
@@ -286,7 +298,7 @@ static void draw(void) { ph_fly_ready(&D.it);
   ph_drag(0, 0, SB_W, SB_H - INS_B - BAR_H, &D.v, 1); scroll_tick(&D.v);
   int wide = SB_W > SB_H; /* sideways (a tablet held flat), as on the TV: the picture fills the screen, the name, facts, pills and story on it */
   float y0 = -D.v.pos, coverH = SB_W * 9 / 16 + INS_T + 20; if (coverH > SB_H * 0.62f) coverH = SB_H * 0.62f; if (wide) coverH = SB_H; char buf[600];
-  const char *bg = sb_bg_mid(&D.it, buf, sizeof buf); GLuint tex = bg && *bg ? img_get_shaped(bg, (int)SB_W, (int)coverH, 0, 1) : 0;
+  const char *bg = sb_bg_mid(&D.it, buf, sizeof buf); if (!D.it.background[0] && !sb_is_imdb(D.it.id)) bg = NULL; char hiBg[600]; if (bg && *bg) { detail_backdrop_url(bg, hiBg, sizeof hiBg); bg = hiBg; } GLuint tex = bg && *bg ? img_get_shaped(bg, (int)SB_W, (int)coverH, 0, 1) : 0;
   float py = y0 * 0.5f; if (py > 0) py = 0;
   if (!tex || !ph_picture(tex, 0, py, SB_W, coverH + (py < 0 ? 0 : 0), 0, WHITE_A(255))) ph_box(0, py, SB_W, coverH, 0);
   gfx_rrect_v(0, py + coverH * 0.3f, SB_W, coverH * 0.7f + 2, 0, col_alpha(PAGE | 0xff000000u, 0), PAGE | 0xff000000u);

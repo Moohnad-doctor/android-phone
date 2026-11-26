@@ -65,7 +65,7 @@ void best_audio_for(const char *type, const char *vid, char *out, size_t cap); /
 void best_set_langs(const char *audio, const char *subs); /* the user's languages: streams in them first, ones naming only others last */
 void best_for_download_next(void);   /* the next best_choose is for a download: torrents by how surely they finish, not how fast they start */
 void best_cap_next(double mbps);       /* the next best_choose picks as if the line were no faster than this (downloads: a sensible size) */
-void best_limits_next(int maxRes, int hdr); /* the next choice only: no picture above maxRes (0: the device's), HDR allowed or not (-1: the device's) */
+void best_limits_next(int minRes, int maxRes, int hdr); /* minimum is ignored for fallback; max is a soft preference; HDR -1=device */
 unsigned best_choose(const char *type, const char *vid, int durMin, BestStatusCb status, BestDoneCb done, void *ud);
 void best_choose_cancel(unsigned tok);
 void best_skip(const char *url);       /* a stream that failed to play: left out of the next choices (until the app restarts) */

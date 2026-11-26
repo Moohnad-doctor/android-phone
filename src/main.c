@@ -432,7 +432,7 @@ int main(int argc, char **argv) {
       else if (lt == 2 && getenv("SB_LIVE_ZAP") && SDL_GetTicks() > 21000) { live_zap(1); lt = 9; } }
     if (frame == 150 && getenv("SB_BESTFOR")) { /* development: SB_BESTFOR="series tt0903747:5:4 dl" runs a best choice (dl: as a download, with the download settings) and logs its pick */
       static char ty[16], vd[96], md[8]; sscanf(getenv("SB_BESTFOR"), "%15s %95s %7s", ty, vd, md);
-      if (!strcmp(md, "dl")) { extern void ph_dl_prefs(double *mbps, int *res, int *hdr); double mb; int res, hdr; ph_dl_prefs(&mb, &res, &hdr); best_cap_next(mb); best_limits_next(res, hdr); best_for_download_next(); }
+      if (!strcmp(md, "dl")) { extern void ph_dl_prefs(double *mbps, int *res, int *hdr); double mb; int res, hdr; ph_dl_prefs(&mb, &res, &hdr); best_cap_next(mb); best_limits_next(1080, res, hdr); best_for_download_next(); }
       best_choose(ty, vd, strcmp(ty, "series") ? 100 : 45, bf_status, bf_done, NULL); }
     if (frame == 90 && getenv("SB_OPEN_LIVE")) app_go(SCR_LIVE, NULL, 0); /* development: straight to the channels page */
     if (frame == (getenv("SB_OPEN_AT") ? atoi(getenv("SB_OPEN_AT")) : 120) && getenv("SB_OPEN")) { /* development: SB_OPEN="detail:movie:tt0241527" | "lib" | "coll:t1241" opens that screen */
