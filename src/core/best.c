@@ -230,7 +230,7 @@ static int rate(const Stream *s, const TvCaps *c, double mbps, double dur, BestR
   snprintf(a0, sizeof a0, "%s", au); { char *sp = strchr(a0, ' '); if (sp) *sp = 0; }
   if (r > (c->maxRes ? c->maxRes : 1080)) return 0; /* above the panel's resolution: the TV fails to play it */
   if (limMinRes > 0 && rr < limMinRes) return 0;
-  if (limMinHdr && !hd[0]) return 0;
+  if (limMinHdr && c->hdr && !hd[0]) return 0; /* require HDR only when the selected display can use it */
 #ifdef SB_PHONE
   int panel = panel_res(); /* a phone: the picture as its own panel shows it (a 720-line screen gains nothing from 1080p but a little sharpness) */
   int over = rr > panel; double sc = by_res(over ? panel : rr, 400, 340, 300, 200, 80) + (over ? 6 : 0);
