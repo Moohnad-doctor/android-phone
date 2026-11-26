@@ -277,7 +277,7 @@ void card_standin(const Item *it, float x, float y, float w, float h, float r, i
   unsigned hh = 2166136261u; for (const char *p = it->name; *p; p++) hh = (hh ^ (unsigned char)*p) * 16777619u;
   uint32_t nc = hsl2rgb((float)(hh % 360), 0.38f, 0.26f), nd = hsl2rgb((float)((hh / 360) % 360), 0.30f, 0.12f);
   gfx_rrect_v(x, y, w, h, r, nc | 0xff000000u, nd | 0xff000000u); /* (the colour first: under the backdrop while it comes, and when there is none) */
-  char b[512]; const char *bg = wide ? sb_poster_of(it, b, sizeof b) : sb_bg_small(it, b, sizeof b); /* (a poster's stand-in: its backdrop; wide art's: its poster) */
+  char b[512]; const char *bg = wide ? sb_poster_of(it, b, sizeof b) : NULL; /* a failed poster uses the clean gradient, never a stretched low-resolution backdrop */
   if (bg && *bg && !img_shaped_failed(bg, (int)w, (int)h, r, 1)) { GLuint t = img_get_shaped(bg, (int)w, (int)h, r, 1); if (t) ph_picture(t, x, y, w, h, r, WHITE_A(170)); }
   if (foot >= 0) {
     gfx_rrect_v(x, y + h * 0.35f, w, h * 0.65f, r, BLACK_A(0), BLACK_A(200));
