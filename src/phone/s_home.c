@@ -142,8 +142,9 @@ static void got_row(ItemList *l, int cached, void *ud) { (void)cached; unsigned 
 static void home_backdrop_url(const char *src, char *out, size_t cap) {
   if (!cap) return;
   snprintf(out, cap, "%s", src ? src : "");
-  char *p = strstr(out, "/medium/");
-  if (p) { memmove(p + 10, p + 8, strlen(p + 8) + 1); memcpy(p, "/original/", 10); }
+  char *p = strstr(out, "/small/");
+  if (p) memcpy(p, "/large/", 7);
+  else if ((p = strstr(out, "/medium/")) != NULL) { memmove(p + 10, p + 8, strlen(p + 8) + 1); memcpy(p, "/original/", 10); }
   else {
     static const char *const sizes[] = { "/w300/", "/w500/", "/w780/" };
     for (int i = 0; i < 3; i++) if ((p = strstr(out, sizes[i])) != NULL) {

@@ -400,15 +400,14 @@ static float src_chips(float px, float top, float pw) { /* a tab per addon (the 
 static int lines_of(const char *t, const char **st, int *len, int max) { int n = 0; while (t && *t && n < max) { const char *e = strchr(t, '\n'); int l = e ? (int)(e - t) : (int)strlen(t); while (l && (t[l - 1] == ' ' || t[l - 1] == '\r')) l--; st[n] = t; len[n++] = l; if (!e) break; t = e + 1; } while (n && !len[n - 1]) n--; return n; }
 static float src_card(float x, float y, float w, int i, const char *nm, const char *tt, int on, float lt) {
   const char *ns[6], *ds[14]; int nl[6], dl[14], nn = lines_of(nm, ns, nl, 6), nd = lines_of(tt, ds, dl, 14);
-  float lh = 30, h = (nd > nn ? nd : nn) * lh + 32; if (h < 104) h = 104; if (y + h < lt - 20 || y > SB_H) return h + 10;
+  float lh = 26, h = (nn + nd) * lh + 44; if (h < 96) h = 96; if (y + h < lt - 20 || y > SB_H) return h + 10;
   float pk = ppress(x, y, w, h), k = 1 - 0.015f * pk; gfx_scale_push(k, k, x + w / 2, y + h / 2);
-  gfx_rrect(x, y, w, h, 22, on ? col_alpha(ACC, 0.24f) : WHITE_A(pk > 0 ? (int)(12 + 22 * pk) : 9)); if (on) gfx_ring(x, y, w, h, 22, 2, col_alpha(ACC, 0.9f));
-  float lw = fminf(360.0f, w * 0.42f), ny = y + h / 2 - nn * lh / 2; char b[400];
-  for (int q = 0; q < nn; q++) { snprintf(b, sizeof b, "%.*s", nl[q], ns[q]); text_draw(b, x + 22, ny + q * lh + 2, 25, 800, WHITE_A(on ? 255 : 240), 0, fmaxf(40.0f, lw - 44), ALIGN_START); }
-  gfx_rect(x + lw, y + 18, 1.5f, h - 36, WHITE_A(30));
-  float tx = x + lw + 20, tw = x + w - tx - (on ? 70 : 20), dy = y + h / 2 - nd * lh / 2;
-  for (int q = 0; q < nd; q++) { snprintf(b, sizeof b, "%.*s", dl[q], ds[q]); text_draw(b, tx, dy + q * lh + 3, 22, 500, WHITE_A(on ? 235 : 200), 0, tw, ALIGN_START); }
-  if (on) icon_draw("ph_check", x + w - 62, y + h / 2 - 22, 44, ACC2);
+  gfx_rrect(x, y, w, h, 18, on ? col_alpha(ACC, 0.24f) : WHITE_A(pk > 0 ? (int)(12 + 22 * pk) : 9)); if (on) gfx_ring(x, y, w, h, 18, 2, col_alpha(ACC, 0.9f));
+  char b[400]; float yy = y + 14;
+  for (int q = 0; q < nn; q++) { snprintf(b, sizeof b, "%.*s", nl[q], ns[q]); text_draw(b, x + 24, yy + q * lh, 20, 800, WHITE_A(on ? 255 : 240), 0, w - 72, ALIGN_START); }
+  yy += nn * lh + (nd ? 6 : 0);
+  for (int q = 0; q < nd; q++) { snprintf(b, sizeof b, "%.*s", dl[q], ds[q]); text_draw(b, x + 24, yy + q * lh, 18, 500, WHITE_A(on ? 235 : 200), 0, w - 72, ALIGN_START); }
+  if (on) icon_draw("ph_check", x + w - 54, y + 12, 34, ACC2);
   gfx_scale_pop(); phit(x, y, w, h, a_src, i, 0); if (nholds < 64 && y + h > hcY0 && y < hcY1) { holds[nholds].x = x; holds[nholds].y = y; holds[nholds].w = w; holds[nholds].h = h; holds[nholds++].i = i; }
   return h + 10;
 }
@@ -452,10 +451,10 @@ static void td_tick(float pw) { float dt = phDt > 0.05f ? 0.05f : phDt;
     if (app_now() - TD.flyAt > 0.3) { TD.on = 0; TD.ox = TD.oy = TD.vx = TD.vy = 0; a_back(0, 0); tween_set(&panA, 0); } } (void)pw; }
 static void panel_draw(void) {
   float a = panA.v; if (a <= 0.01f) return; int kind = panel ? panel : shownKind;
-  td_tick(fminf(1200.0f, SB_W * 0.52f)); float pull = TD.on ? td_pull(fminf(1200.0f, SB_W * 0.52f)) : 0, fly = TD.on == 3 ? clampf((float)((app_now() - TD.flyAt) / 0.3), 0, 1) : 0;
-  float tsc = 1 - 0.16f * pull - 0.22f * fly, trad = 46 * pull; /* smaller as it comes away, rounder */
+  td_tick(fminf(820.0f, SB_W * 0.36f)); float pull = TD.on ? td_pull(fminf(820.0f, SB_W * 0.36f)) : 0, fly = TD.on == 3 ? clampf((float)((app_now() - TD.flyAt) / 0.3), 0, 1) : 0;
+  float tsc = 1 - 0.09f * pull - 0.16f * fly, trad = 46 * pull; /* smaller as it comes away, rounder */
   gfx_offset_push(TD.ox, TD.oy); gfx_scale_push(tsc, tsc, TD.gx, TD.gy); gfx_opacity_push(1 - 0.25f * pull - 0.75f * fly * fly);
-  float pw = fminf(1200.0f, SB_W * 0.52f), px = 20, py = 20, ph = SB_H - 40;
+  float pw = fminf(820.0f, SB_W * 0.36f), px = 24, py = 20, ph = SB_H - 40;
   /* the glass grows out of the pill that opened it (and shrinks back into it); the contents come in once it has room */
   SbRect o = orgR.w > 0 ? orgR : rect(px + pw / 2 - 100, SB_H - 112, 200, 78); float e = clampf(a, 0, 1);
   float gx = o.x + (px - o.x) * e, gy = o.y + (py - o.y) * e, gw = o.w + (pw - o.w) * e, gh = o.h + (ph - o.h) * e, gr = 39 + (36 - 39) * e;
@@ -463,9 +462,9 @@ static void panel_draw(void) {
   gfx_clip_push(gx, gy, gw, gh); gfx_opacity_push(clampf((a - 0.45f) / 0.55f, 0, 1));
   phit(px, py, pw, ph, a_keep, 0, 0); /* the panel itself: taps on it do not reach the picture */
   int tk = player_tray_kind(); const char *title = kind == 9 ? T("Channels") : kind == 6 ? T("Speed") : kind == 2 ? T("Sources") : (kind == 3 || kind == 4) ? T("Audio & subtitles") : tk == 5 ? player_tray_title() : T("Episodes");
-  float tx = px + 36; if (tk == 5) { circle(px + 72, py + 70, 42, "ph_back", 0, a_epback, 0); tx = px + 130; }
-  text_draw(title, tx, py + 70 - text_line_height(40) / 2.0f, 40, 800, WHITE_A(250), -0.3f, pw - (tx - px) - 120, ALIGN_START);
-  circle(px + pw - 72, py + 70, 42, "ph_x", 0, a_back, 0);
+  float tx = px + 28; if (tk == 5) { circle(px + 58, py + 64, 32, "ph_back", 0, a_epback, 0); tx = px + 102; }
+  text_draw(title, tx, py + 64 - text_line_height(30) / 2.0f, 30, 800, WHITE_A(250), -0.3f, pw - (tx - px) - 84, ALIGN_START);
+  circle(px + pw - 56, py + 64, 32, "ph_x", 0, a_back, 0);
   float top = py + 136;
   /* Audio & subtitles: two segments; subtitles have their own tabs (the file's, the addons') */
   if (kind == 3 || kind == 4) { float sx = px + 28, sw = (pw - 56) / 2; static Tween segX; tween_to(&segX, tk == 4 ? 1 : 0, 0.3f, EASE_WEB); tween_tick(&segX, phDt);
@@ -487,7 +486,7 @@ static void panel_draw(void) {
     x = x0; for (int i = 0; i < nt; i++) { float c = onW > 0 ? clampf(1 - fabsf((x - x0) - tX.v) / (tw[i] > 1 ? tw[i] : 1), 0, 1) : 0; text_draw(tn[i], x + tw[i] / 2, top + 33 - text_line_height(28) / 2.0f, 28, 700, col_mix(WHITE_A(220), ACC_FG, c), 0, 0, ALIGN_CENTER); x += tw[i] + 12; }
     gfx_clip_pop(); tabV.max = tot + 56 - pw; scroll_tick(&tabV); top += 88; }
   if (tk == 2 || tk == 5) top = src_chips(px, top, pw);
-  float lt = top + 16, lh = py + ph - 24 - (top + 16), x = px + 32, w = pw - 64; gfx_clip_push(px, lt, pw, lh); scroll_tick(&panV); scroll_tick(&panV2); hcY0 = lt; hcY1 = lt + lh;
+  float lt = top + 16, lh = py + ph - 24 - (top + 16), x = px + 28, w = pw - 56; gfx_clip_push(px, lt, pw, lh); scroll_tick(&panV); scroll_tick(&panV2); hcY0 = lt; hcY1 = lt + lh;
   { static int lastKey = -1, dir = 1; static Tween navA; int key = kind * 100000 + tk * 1000 + (tk == 4 || tk == 1 ? player_tray_tab() * 10 : 0) + subStyle;
     if (key != lastKey) { dir = key > lastKey ? 1 : -1; if (lastKey >= 0 && panA.v > 0.5f) { tween_set(&navA, 0); tween_to(&navA, 1, 0.3f, EASE_WEB); } else tween_set(&navA, 1); lastKey = key; }
     tween_tick(&navA, phDt); gfx_offset_push(dir * (1 - navA.v) * 70, 0); gfx_opacity_push(0.15f + 0.85f * navA.v); } /* the new list comes in from its side */
@@ -525,8 +524,7 @@ static void notice_draw(float osd) {
   extern const char *player_title_id(void); const char *id = player_title_id();
   if (strcmp(id, PGN.id)) { snprintf(PGN.id, sizeof PGN.id, "%s", id); PGN.at = 0; PGN.g.n = 0; PGN.sess++; tween_set(&PGN.a, 0); }
   static unsigned asked; if (asked != PGN.sess && player_live() && !player_is_trailer() && !strncmp(id, "tt", 2)) { asked = PGN.sess; parental_get(id, on_pgn, (void *)(uintptr_t)PGN.sess); }
-  int reveal = player_paused() || ui_on();
-  int on = PGN.at > 0 && (app_now() - PGN.at < 5.0 || reveal) && !panel && posA.to < 0.5f;
+  int on = PGN.at > 0 && app_now() - PGN.at < 5.0 && !panel && posA.to < 0.5f;
   tween_to(&PGN.a, on ? 1 : 0, on ? 0.28f : 0.45f, EASE_CSS_EASE); tween_tick(&PGN.a, phDt);
   if (PGN.a.v < 0.004f || !PGN.g.n) return;
   float x = SB_W - 34, y = 26 + osd * 126.0f, rowH = 42.0f;
@@ -549,7 +547,7 @@ static void notice_draw(float osd) {
 /* ---- the frame ---- */
 #define TOPY 74.0f
 #undef TOPR
-#define TOPR 48.0f
+#define TOPR 40.0f
 #define LOCKX (SB_W - 204)
 #define TVX (SB_W - 88)
 #define DLX (SB_W - 320)
@@ -651,14 +649,14 @@ void phone_player_draw(void) {
     gfx_offset_push(0, (1 - a) * 190);
     double d = player_dur(), pt = player_time(); if (heldT >= 0 && (fabs(pt - heldT) < 1.5 || app_now() > heldUntil)) heldT = -1;
     double t = G.mode == 4 || G.mode == 1 ? scrubT : heldT >= 0 ? heldT : pt; /* (no jump back while the seek lands) */ float x0 = barX0(), x1 = barX1(), by = barY(), bw = x1 - x0;
-     title_draw(SB_W - 560.0f, 520.0f, by - 92.0f);
+     title_draw(x1 - 520.0f, 520.0f, by - 92.0f);
     int lv = live_now(); /* a live broadcast: LIVE in red where the time left was, the bar full, no knob */
     char tl[24], tr[24]; fmt(t, tl, sizeof tl); fmt(d > t ? d - t : 0, tr + 1, sizeof tr - 1); tr[0] = '-'; if (d <= 0) snprintf(tr, sizeof tr, "--:--");
     if (lv) { snprintf(tr, sizeof tr, "%s", T("LIVE")); text_draw(tr, x1 + 13.2f, by - text_line_height(8) / 2.0f + 1.1f,8, 800, RGB(0xff, 0x4d, 0x4d), 0.5f, 0, ALIGN_START); }
     else { char total[24], stamp[64]; fmt(d, total, sizeof total); snprintf(stamp, sizeof stamp, "%s / %s", tl, total); text_draw(stamp, x1, by + 20, 19, 700, WHITE_A(220), 0, 0, ALIGN_END); }
     float pd = d > 0 ? clampf((float)(t / d), 0, 1) : 0;
     if (lv) { gfx_rrect(x0, by - 2.75f, bw, 5.5f, 2.75f, RGB(0xff, 0x4d, 0x4d)); } else {
-    float pb = d > 0 ? (float)(player_buffered() / d) : 0; pb = clampf(pb, 0, 1); float th = G.mode == 4 || G.mode == 1 ? 5.0f : 4.0f;
+    float pb = d > 0 ? (float)(player_buffered() / d) : 0; pb = clampf(pb, 0, 1); float th = 5.5f;
     gfx_rrect(x0, by - th / 2, bw, th, th / 2, WHITE_A(55));
     { Item it_; char v_[96]; const Stream *s_; float ph_dl_fraction(const char *id, const char *vid); float fd = player_now(&it_, v_, sizeof v_, &s_) ? ph_dl_fraction(it_.id, v_) : -1; /* a download of it, in order: the part on the phone */
       if (fd > 0 && fd < 1) gfx_rrect(x0, by - th / 2, bw * fd, th, th / 2, col_alpha(ACC2 | 0xff000000u, 0.45f)); }
@@ -675,7 +673,7 @@ void phone_player_draw(void) {
     /* Nuvio-style bottom-left controls with comfortable touch targets. */
      gfx_opacity_push(1 - seekK.v);
      {
-       float cy = SB_H - 82.0f, r = TOPR, x = 54.0f, step = 96.0f;
+       float cy = SB_H - 76.0f, r = 34.0f, x = 48.0f, step = 82.0f;
        hud_circle(x, cy, r, "", panel == 3 || panel == 4, a_panel, 4);
        icon_draw("p_spk", x - 19, cy - 14, 28, WHITE_A(245)); icon_draw("p_cc", x + 1, cy - 13, 26, WHITE_A(245));
        text_draw(T("Audio"), x, cy + 39, 13, 650, WHITE_A(220), 0, 0, ALIGN_CENTER); pillR[4] = rect(x-r-8, cy-r-8, 2*r+16, 2*r+16); x += step;
