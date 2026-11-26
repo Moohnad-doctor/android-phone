@@ -73,7 +73,7 @@ static void tk_link(int a, int b);
 static int tkLinking;
 static void page_act(int p, int b) { (void)b; S.page = p;
   if (p == P_TRAKT && !tkLinking && scrobble_state() != TRAKT_LINKED && trakt_client_id()[0]) tk_link(0, 0); } /* Trakt not connected: its code comes at once (no Connect step first) */
-static void card(float x, float y, float w, float h) { ph_glass(x, y, w, h, 28, RGBA(16, 14, 22, 92)); } /* glass, as the bar's pills: the page blurred under it, a light rim */
+static void card(float x, float y, float w, float h) { gfx_rrect(x, y, w, h, 28, SURF); gfx_ring(x, y, w, h, 28, 1, WHITE_A(22)); } /* opaque OLED card: same surface and rim as Downloads */
 static float grp_h(float y, float h) { gx = PAD; gw = SB_W - 2 * PAD; gTop = y; gRows = 1; gRow = 0; gH = h; card(gx, y, gw, gH); return y; }
 static float grp(float y, int rows) { gx = PAD; gw = SB_W - 2 * PAD; gTop = y; gRows = rows; gRow = 0; gH = rows * RH;
   card(gx, y, gw, gH); return y; }
@@ -324,7 +324,7 @@ static void s_head(const char *title, float pos) {
 static const char *const DEMO_ID[3] = { "tt1727587", "tt1254207", "tt2285752" }, *const DEMO_NM[3] = { "Sintel", "Big Buck Bunny", "Tears of Steel" };
 static int demo_item(int i, Item *out, char *bg, size_t cap) { i = ((i % 3) + 3) % 3; memset(out, 0, sizeof *out); snprintf(out->id, sizeof out->id, "%s", DEMO_ID[i]); snprintf(out->type, sizeof out->type, "movie"); snprintf(out->name, sizeof out->name, "%s", DEMO_NM[i]);
   snprintf(out->poster, sizeof out->poster, "https://images.metahub.space/poster/medium/%s/img", DEMO_ID[i]); snprintf(out->logo, sizeof out->logo, "https://images.metahub.space/logo/medium/%s/img", DEMO_ID[i]);
-  snprintf(bg, cap, "https://images.metahub.space/background/medium/%s/img", DEMO_ID[i]); snprintf(out->background, sizeof out->background, "%s", bg); return 3; }
+  snprintf(bg, cap, "https://images.metahub.space/background/original/%s/img", DEMO_ID[i]); snprintf(out->background, sizeof out->background, "%s", bg); return 3; }
 static GLuint still(float w, float h) { static char u[200]; if (!u[0]) { Item it; demo_item(0, &it, u, sizeof u); } return img_get_shaped(u, (int)w, (int)h, 28, 1); } /* Sintel's still, every time */
 static uint32_t hexcol(const char *h) { unsigned v = 0xffffff; if (h && h[0] == '#') sscanf(h + 1, "%x", &v); return 0xff000000u | v; }
 static float subPrevY; static int subPrevOn; static void sub_preview_draw(float y);
@@ -361,7 +361,7 @@ static float look_preview(float y) {
   if (have) { if (prevI >= 0 && xf.v < 1) { Item pi; char pbg[1100]; demo_item(prevI, &pi, pbg, sizeof pbg); GLuint pt = pbg[0] ? img_get_shaped(pbg, (int)w, (int)h, 28, 1) : 0; if (!pt || !ph_picture(pt, x, y, w, h, 28, WHITE_A(255))) gfx_rrect(x, y, w, h, 28, SURF); }
     GLuint t = cbg[0] ? img_get_shaped(cbg, (int)w, (int)h, 28, 1) : 0; gfx_opacity_push(prevI >= 0 ? xf.v : 1); if (!t || !ph_picture(t, x, y, w, h, 28, WHITE_A(255))) gfx_rrect(x, y, w, h, 28, SURF); gfx_opacity_pop(); }
   else { GLuint t = still(w, h); if (!t || !ph_picture(t, x, y, w, h, 28, WHITE_A(255))) gfx_rrect(x, y, w, h, 28, SURF); }
-  gfx_rrect(x, y, w, h, 28, BLACK_A(90)); gfx_rrect_v(x, y, w, h, 28, BLACK_A(60), col_alpha(PAGE | 0xff000000u, 0.92f)); gfx_glow_round(x - w * 0.1f, y + h * 0.35f, w * 1.2f, h, col_alpha(ac[0], 0.35f), x, y, w, h, 28); gfx_ring(x, y, w, h, 28, 1.5f, WHITE_A(30));
+  gfx_rrect(x, y, w, h, 28, BLACK_A(90)); gfx_rrect_v(x, y, w, h, 28, BLACK_A(60), col_alpha(0xff000000u, 0.92f)); gfx_glow_round(x - w * 0.1f, y + h * 0.35f, w * 1.2f, h, col_alpha(ac[0], 0.35f), x, y, w, h, 28); gfx_ring(x, y, w, h, 28, 1.5f, WHITE_A(30));
   /* its name: the title's logo when it shows a title */
   { float ly = y + h * 0.18f; int drew = 0; if (have && ci.logo[0]) { float lw = w * 0.5f, lh = 84, asp = 0; GLuint lt = img_get(ci.logo, (int)lw, (int)lh, &asp); if (lt && asp > 0) { float ww = lh * asp, hh2 = lh; if (ww > lw) { ww = lw; hh2 = ww / asp; } gfx_opacity_push(prevI >= 0 ? xf.v : 1); gfx_image(lt, cx - ww / 2, ly + 40 - hh2 / 2, ww, hh2, 0, WHITE_A(255), 0, 0, 1, 1); gfx_opacity_pop(); drew = 1; } }
     if (!drew) text_draw(have ? ci.name : "Origin", cx, ly, F_H1, 900, TXT, -0.8f, w - 60, ALIGN_CENTER); }
@@ -550,19 +550,20 @@ static float page_body(int pg, float y, const char **titleOut) { const char *tit
   }  *titleOut = title; return y; }
 static Scroll sb; static int sbWas, sbGo, sbLanded; static float sbX; /* sb: a swipe back on a sub-page (its pos goes negative as the finger moves right); Back runs the same slide */
 static void s_draw(void) {
+  gfx_rect(0, 0, SB_W, SB_H, 0xff000000u);
   nsw = nch = 0; Scroll *v = &S.v[S.page]; ph_drag(0, 0, SB_W, SB_H - INS_B - BAR_H, v, 1); scroll_tick(v);
   /* a sub-page comes in from the right, the list goes back to the left */
   if (S.page != P_MAIN && !sbGo) { ph_drag(0, INS_T, SB_W, SB_H - INS_T - INS_B - BAR_H, &sb, 0); sb.free = 1; sb.max = 0; } /* (opened from elsewhere: the same slide, that page under it) */
   if (sb.drag) { sbWas = 1; sbX = -sb.pos < 0 ? 0 : -sb.pos; }
   else { if (sbWas) { sbWas = 0; sbGo = sbX > SB_W * 0.28f || sb.vel < -900; } sb.vel = 0; float to = sbGo ? SB_W : 0; sbX += (to - sbX) * clampf(phDt * 14, 0, 1); if (fabsf(to - sbX) < 1) sbX = to;
-    if (sbGo && sbX >= SB_W - 1) { int toPage = page_parent(S.page); sbGo = 0; sbX = 0; sb.pos = 0; if (direct) { extern int phoneSwipeBack; void app_ambient_cut(void); extern Screen phDl; phoneSwipeBack = 1; S.page = P_MAIN; app_back(); app_ambient_cut(); gfx_rect(0, 0, SB_W, SB_H, PAGE | 0xff000000u); phDl.draw(); return; } /* (the glows went with the page: not faded out again over Downloads; Downloads drawn in this frame too, never an empty one) */ /* (its Back sees it was opened from there and lets the app go back) */ /* back to where it was opened from, already in view */ S.page = toPage; sbLanded = 1; } else if (!sbGo) sb.pos = -sbX; }
+    if (sbGo && sbX >= SB_W - 1) { int toPage = page_parent(S.page); sbGo = 0; sbX = 0; sb.pos = 0; if (direct) { extern int phoneSwipeBack; void app_ambient_cut(void); extern Screen phDl; phoneSwipeBack = 1; S.page = P_MAIN; app_back(); app_ambient_cut(); gfx_rect(0, 0, SB_W, SB_H, 0xff000000u); phDl.draw(); return; } /* (the glows went with the page: not faded out again over Downloads; Downloads drawn in this frame too, never an empty one) */ /* (its Back sees it was opened from there and lets the app go back) */ /* back to where it was opened from, already in view */ S.page = toPage; sbLanded = 1; } else if (!sbGo) sb.pos = -sbX; }
   v = &S.v[S.page]; /* (landed this frame: the page now shown is drawn at its own scroll, never the one it left (a frame of it drawn at the other's place)) */
   int under = sbX > 1 && S.page != P_MAIN; /* the list under the page being swiped away */ sbKNow = direct && S.page != P_MAIN ? sbX / SB_W : 0;
   static int lastPage = -1, dir = 1; static Tween pa; if (lastPage != S.page) { if (sbLanded) { sbLanded = 0; lastPage = S.page; tween_set(&pa, 1); } else { dir = S.page > lastPage ? 1 : -1; if (lastPage >= 0) { tween_set(&pa, 0); tween_to(&pa, 1, 0.32f, EASE_WEB); } else tween_set(&pa, 1); lastPage = S.page; } } tween_tick(&pa, phDt);
   if (under) { int was = S.page, hn = hit_count(); S.page = P_MAIN; extern int phGhost, phGhostGlass; if (!direct) { ph_glass_grab(); phGhostGlass = 1; } /* (the list's own glass: the page and its glows, grabbed before the list: it looks as it will once there) */ phGhost = 1; gfx_offset_push(-(SB_W - sbX) / SB_W * 0.25f * fminf(SB_W, 1100), 0); /* (a quarter of what it shows: on a tablet its column stays in view) */
-    if (direct) { extern Screen phDl; Scr sv = SCR; SCR = SCR_DISC; gfx_rect(0, 0, SB_W, SB_H, PAGE | 0xff000000u); phDl.draw(); SCR = sv; } else if (page_parent(was) != P_MAIN) { int pp = page_parent(was); S.page = pp; nsw = nch = 0; const char *tt = T("Settings"); float yy = INS_T + 150 - S.v[pp].pos; phone_col_push(1100); page_body(pp, yy, &tt); phone_col_pop(); s_head(tt, S.v[pp].pos); } else s_list(); /* under it: its parent page (Playback under Subtitles and Audio) */ /* under it: the page it was opened from (Downloads), else the list */
+    if (direct) { extern Screen phDl; Scr sv = SCR; SCR = SCR_DISC; gfx_rect(0, 0, SB_W, SB_H, 0xff000000u); phDl.draw(); SCR = sv; } else if (page_parent(was) != P_MAIN) { int pp = page_parent(was); S.page = pp; nsw = nch = 0; const char *tt = T("Settings"); float yy = INS_T + 150 - S.v[pp].pos; phone_col_push(1100); page_body(pp, yy, &tt); phone_col_pop(); s_head(tt, S.v[pp].pos); } else s_list(); /* under it: its parent page (Playback under Subtitles and Audio) */ /* under it: the page it was opened from (Downloads), else the list */
     gfx_offset_pop(); phGhost = 0; phGhostGlass = 0; S.page = was; hit_trim(hn);
-    gfx_rect(0, 0, SB_W, SB_H, BLACK_A((int)(40 * (1 - sbX / SB_W)))); /* (a light shade only: no brightness jump as it lands) */ gfx_rect(sbX, 0, SB_W, SB_H, PAGE | 0xff000000u); { void app_ambient_at(float dx); gfx_clip_push(sbX, 0, SB_W, SB_H); app_ambient_at(sbX); gfx_clip_pop(); } gfx_offset_push(sbX, 0); } /* the page being swiped away keeps its glows (they go with it) */
+    gfx_rect(0, 0, SB_W, SB_H, BLACK_A((int)(40 * (1 - sbX / SB_W)))); /* (a light shade only: no brightness jump as it lands) */ gfx_rect(sbX, 0, SB_W, SB_H, 0xff000000u); { void app_ambient_at(float dx); gfx_clip_push(sbX, 0, SB_W, SB_H); app_ambient_at(sbX); gfx_clip_pop(); } gfx_offset_push(sbX, 0); } /* the page being swiped away keeps its glows (they go with it) */
   gfx_offset_push(dir * 90 * (1 - pa.v), 0); gfx_opacity_push(0.2f + 0.8f * pa.v);
   ph_glass_grab(); /* (the page under the cards, for their glass) */
   float y = INS_T + 150 - v->pos; const char *title = T("Settings");

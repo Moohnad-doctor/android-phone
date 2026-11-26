@@ -117,6 +117,7 @@ void  ph_glass_off(void);
 void  ph_glass_grab(void);   /* the page drawn so far, blurred, for ph_glass (as the bar's pills) */
 void  ph_glass(float x, float y, float w, float h, float r, uint32_t tint); /* a shape of that glass (plain tint when there is none) */   /* the glass behind a page's top bar, k 0..1 */
 float row_draw(const char *title, const ItemList *l, int wide, float y, Scroll *s, int rowIdx, HitFn focus, int focusedIdx);
+float row_draw_act(const char *title, const ItemList *l, int wide, float y, Scroll *s, int rowIdx, HitFn focus, HitFn act, int focusedIdx);
 float row_draw_k(const char *title, const ItemList *l, int wide, float y, Scroll *s, int rowIdx, HitFn focus, int focusedIdx, float *k); /* the same, opening and closing as it fills and empties */
 void  card_at(const Item *it, float x, float y, float w, float h, int wide, int label, unsigned long long key, int pressed);
 int   button(float x, float y, float w, float h, const char *icon, const char *label, int kind, HitFn act, int a, int b); /* kind 0 glass, 1 accent, 2 white, 3 plain */
@@ -133,6 +134,7 @@ void  ted_backspace(TEd *e);
 int   ted_key(TEd *e, int k);    /* left / right: the caret */
 void  ted_reset(TEd *e);         /* its text changed by other means: the caret at its end */
 float poster_grid(const ItemList *l, float y, HitFn focus, int tag, int focusedIdx);
+float poster_grid_act(const ItemList *l, float y, HitFn focus, HitFn act, int tag, int focusedIdx);
 void  section_title(const char *t, float x, float y);
 void  switch_draw(float x, float y, int on);
 void  meta_line_draw(const Item *it, float x, float y, int px, uint32_t color);

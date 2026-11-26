@@ -44,7 +44,7 @@ static void feat_act(int a, int b2) { if (b2 < 0 || b2 >= F.n) return; Item it =
   else app_open_item(&it); }
 /* the spotlight, drawn at y: each title a page of the strip; returns its height */
 /* a film's backdrop for other pages to show (Settings' previews): the spotlight's one, "" before it has any */
-const char *ph_home_backdrop(char *out, size_t cap) { out[0] = 0; if (!F.n) return out; const Item *hi = &F.it[F.idx]; const cJSON *hm = sb_meta_cached(hi->type, hi->id); Item full; if (hm) sb_fill_item(&full, hm, hi->type); else full = *hi; const char *b = sb_bg_mid(&full, out, cap); if (b != out) snprintf(out, cap, "%s", b ? b : ""); return out; }
+const char *ph_home_backdrop(char *out, size_t cap) { out[0] = 0; if (!F.n) return out; const Item *hi = &F.it[F.idx]; const cJSON *hm = sb_meta_cached(hi->type, hi->id); Item full; if (hm) sb_fill_item(&full, hm, hi->type); else full = *hi; const char *b = sb_bg_mid(&full, out, cap); if (b != out) snprintf(out, cap, "%s", b ? b : ""); if (out[0]) { char hi[600]; home_backdrop_url(out, hi, sizeof hi); snprintf(out, cap, "%s", hi); } return out; }
 /* the titles of the spotlight, for Appearance's preview of "from the logo / artwork": i-th one's id, backdrop, logo, poster and name; the count */
 int ph_home_demo(int i, Item *out, char *bg, size_t cap) { if (!F.n) return 0; i %= F.n; const Item *hi = &F.it[i]; const cJSON *hm = sb_meta_cached(hi->type, hi->id); Item full; if (hm) { sb_fill_item(&full, hm, hi->type); if (!full.poster[0]) snprintf(full.poster, sizeof full.poster, "%s", hi->poster); } else full = *hi;
   *out = full; const char *b = sb_bg_mid(&full, bg, cap); if (b != bg) snprintf(bg, cap, "%s", b ? b : ""); return F.n; }
@@ -79,7 +79,7 @@ static float feat_draw(float y) {
   { float f = clampf(F.s.pos / W, 0, (float)(F.n - 1)); int i0 = (int)floorf(f); if (i0 > F.n - 1) i0 = F.n - 1; float t = f - i0; t = t * t * (3 - 2 * t); /* the one going under, the next over it fading in: never an edge between them */
     for (int q = 0; q < 2; q++) { int i = i0 + q; if (i >= F.n || (q == 1 && t < 0.003f)) continue; const Item *hi = &F.it[i]; char buf[600];
       const cJSON *hm = sb_meta_cached(hi->type, hi->id); Item full; if (hm) { sb_fill_item(&full, hm, hi->type); if (!full.poster[0]) snprintf(full.poster, sizeof full.poster, "%s", hi->poster); } else full = *hi;
-      const char *bg = sb_bg_mid(&full, buf, sizeof buf); GLuint tx = bg && *bg ? img_get_shaped(bg, (int)W, (int)bh, 0, 1) : 0; if (i == F.idx && bg) { snprintf(keepUrl, sizeof keepUrl, "%s", bg); keepW = (int)W; keepH = (int)bh; } float k = q ? 1.05f - 0.05f * t : 1 + 0.03f * t; /* the old one drifts a little closer, the new settles in */
+      const char *bg = sb_bg_mid(&full, buf, sizeof buf); char hi[600]; if (bg && *bg) { home_backdrop_url(bg, hi, sizeof hi); bg = hi; } GLuint tx = bg && *bg ? img_get_shaped(bg, (int)W, (int)bh, 0, 1) : 0; if (i == F.idx && bg) { snprintf(keepUrl, sizeof keepUrl, "%s", bg); keepW = (int)W; keepH = (int)bh; } float k = q ? 1.05f - 0.05f * t : 1 + 0.03f * t; /* the old one drifts a little closer, the new settles in */
       gfx_opacity_push(q ? t : 1); gfx_scale_push(k, k, W / 2, y + hh / 2); if (!tx || !ph_picture(tx, 0, py - boff, W, bh, 0, WHITE_A((int)(255 * (1 - 0.7f * gone))))) ph_box(0, y, W, hh, 0); gfx_scale_pop(); gfx_opacity_pop(); } }
   { int nx = (F.idx + 1) % F.n; if (nx != F.idx) { const Item *ni = &F.it[nx]; const cJSON *nm = sb_meta_cached(ni->type, ni->id); Item nf; if (nm) sb_fill_item(&nf, nm, ni->type); else nf = *ni; char nb[600]; const char *nbg = sb_bg_mid(&nf, nb, sizeof nb); if (nbg && *nbg) img_get_shaped(nbg, (int)W, (int)bh, 0, 1); } } /* the next title's picture asked ahead: on a big screen it takes a moment, and it is there when its turn comes */
   gfx_opacity_pop();
@@ -118,7 +118,7 @@ static void cw_card_labels(const ItemList *l, const Scroll *s, float y) {
     if (x > SB_W || x + cw < 0) continue;
     CwInfo info; if (lib_cw_info(&l->items[i], &info) && info.leftMin > 0) {
       char rem[48]; snprintf(rem, sizeof rem, "متبقي %.0f د", info.leftMin);
-      float bw = text_width(rem, F_TINY, 800, 0) + 24, bx = x + 12, by = y + top + 12;
+      float bw = text_width(rem, F_TINY, 800, 0) + 24, bx = x + cw - bw - 12, by = y + top + 12;
       gfx_rrect(bx, by, bw, 34, 17, BLACK_A(190)); text_draw(rem, bx + bw / 2, by + 17 - text_line_height(F_TINY) / 2.0f, F_TINY, 800, WHITE_A(245), 0, 0, ALIGN_CENTER);
     }
     {
@@ -138,6 +138,18 @@ static void cw_card_labels(const ItemList *l, const Scroll *s, float y) {
 static void got_row(ItemList *l, int cached, void *ud) { (void)cached; unsigned tag = (unsigned)(uintptr_t)ud; Board *b = &B[tag >> 24]; int i = (tag >> 8) & 255; if ((tag & 255) != (b->gen & 255) || i >= b->n || !l) { if (l) itemlist_free(l); return; }
   HRow *r = &b->rows[i]; if (!l->n && l->total < 0 && !r->list.n && r->retries < 3) { static const double W[3] = { 8, 20, 45 }; r->retryAt = app_now() + W[r->retries]; r->retries++; itemlist_free(l); fprintf(stderr, "[home] %s: no answer, asked again in %.0f s\n", r->def.title, W[r->retries - 1]); return; } /* (an addon that makes its lists on demand: a slow first answer is not the end of the row) */
   if (l->n > 0 || !r->got) { itemlist_clear(&r->list); r->list = *l; free(l); } else itemlist_free(l); r->got = 1; }
+static void home_backdrop_url(const char *src, char *out, size_t cap) {
+  if (!cap) return;
+  snprintf(out, cap, "%s", src ? src : "");
+  char *p = strstr(out, "/medium/");
+  if (p) { memmove(p + 10, p + 8, strlen(p + 8) + 1); memcpy(p, "/original/", 10); }
+  else {
+    static const char *const sizes[] = { "/w300/", "/w500/", "/w780/" };
+    for (int i = 0; i < 3; i++) if ((p = strstr(out, sizes[i])) != NULL) {
+      memmove(p + 7, p + 6, strlen(p + 6) + 1); memcpy(p, "/w1280/", 7); break;
+    }
+  }
+}
 static int home_has(const char *s, const char *needle) {
   if (!s || !needle || !*needle) return 0;
   for (; *s; s++) { const char *a = s, *b = needle; while (*a && *b && tolower((unsigned char)*a) == tolower((unsigned char)*b)) { a++; b++; } if (!*b) return 1; }
@@ -158,26 +170,33 @@ static int home_curate(CatalogDef *out, int max) {
   static const char *movie[] = { "movies", "movie", "film" };
   static const char *series[] = { "series", "shows", "tv" };
   static const char *anime[] = { "anime", "animation" };
-  const char *labels[5] = { "Trending now", "Now playing", "Movies", "Series", "Anime" };
-  const char *types[5] = { NULL, "movie", "movie", "series", "series" };
-  const char *const *terms[5] = { trend, now, movie, series, anime };
-  const int lens[5] = { 3, 3, 3, 3, 2 };
-  for (int slot = 0; slot < 5 && count < max; slot++) {
-    int pick = home_pick(all, n, types[slot], terms[slot], lens[slot], used);
-    if (pick < 0 && slot == 0) pick = home_pick(all, n, "movie", movie, 3, used);
-    if (pick < 0 && slot == 1) pick = home_pick(all, n, "movie", movie, 3, used);
-    if (pick < 0 && slot == 2) pick = home_pick(all, n, "movie", movie, 3, used);
-    if (pick < 0 && slot == 3) pick = home_pick(all, n, "series", series, 3, used);
-    if (pick < 0 && slot == 4) pick = home_pick(all, n, "series", anime, 2, used);
-    if (pick < 0) {
-      for (int i = 0; i < n; i++) if (!used[i] && (!types[slot] || !strcmp(all[i].type, types[slot]))) { pick = i; break; }
-    }
-    if (pick < 0 && n) pick = slot < 3 ? 0 : n - 1;
+  const char *labels[4] = { "Trending now", "Now playing", "Movies", "Series" };
+  const char *const *terms[4] = { trend, now, movie, series };
+  const int lens[4] = { 3, 3, 3, 3 };
+  const char *types[4] = { NULL, "movie", "movie", "series" };
+  int reserved[MAXR] = {0}, generalUsed[MAXR] = {0};
+  for (int i = 0; i < n; i++) reserved[i] = home_has(all[i].title, "anime") || home_has(all[i].title, "animation");
+  for (int i = 0; i < n; i++) generalUsed[i] = reserved[i] || used[i];
+  for (int slot = 0; slot < 4 && count < max; slot++) {
+    int pick = home_pick(all, n, types[slot], terms[slot], lens[slot], generalUsed);
+    if (pick < 0) for (int i = 0; i < n; i++) if (!generalUsed[i] && (!types[slot] || !strcmp(all[i].type, types[slot]))) { pick = i; break; }
     if (pick < 0) continue;
-    out[count] = all[pick]; snprintf(out[count].title, sizeof out[count].title, "%s", labels[slot]);
-    if (slot == 4 && !home_has(all[pick].title, "anime") && !home_has(all[pick].title, "animation")) {
-      if (!out[count].extra[0]) snprintf(out[count].extra, sizeof out[count].extra, "genre=Animation");
-      else { size_t exn = strlen(out[count].extra); if (exn + sizeof "&genre=Animation" < sizeof out[count].extra) strcat(out[count].extra, "&genre=Animation"); }
+    out[count] = all[pick]; snprintf(out[count].title, sizeof out[count].title, "%s", labels[slot]); used[pick] = 1; generalUsed[pick] = 1; count++;
+  }
+  /* Anime gets its own series and movie catalogs; generic catalogs are safely reused
+     with an Animation genre constraint when an addon has no anime-specific catalog. */
+  for (int kind = 0; kind < 2 && count < max; kind++) {
+    const char *type = kind == 0 ? "series" : "movie";
+    int pick = home_pick(all, n, type, anime, 2, used);
+    if (pick < 0) for (int i = 0; i < n; i++) if (!strcmp(all[i].type, type)) { pick = i; break; }
+    if (pick < 0) continue;
+    out[count] = all[pick];
+    snprintf(out[count].title, sizeof out[count].title, "%s", kind == 0 ? "مسلسلات الأنمي" : "أفلام الأنمي");
+    if (!home_has(all[pick].title, "anime") && !home_has(all[pick].title, "animation")) {
+      char extra[200] = ""; snprintf(extra, sizeof extra, "%s", out[count].extra);
+      size_t n0 = strlen(extra);
+      if (n0 < sizeof extra - 1) snprintf(extra + n0, sizeof extra - n0, "%sgenre=Animation", n0 ? "&" : "");
+      snprintf(out[count].extra, sizeof out[count].extra, "%s", extra);
       snprintf(out[count].url, sizeof out[count].url, "%s/%s.json", out[count].path, out[count].extra);
     }
     used[pick] = 1; count++;
@@ -185,7 +204,7 @@ static int home_curate(CatalogDef *out, int max) {
   return count;
 }
 static void load(Board *b, int disc) {
-  CatalogDef defs[MAXR]; int n = disc ? sb_disc_defs(defs, MAXR) : home_curate(defs, 5);
+  CatalogDef defs[MAXR]; int n = disc ? sb_disc_defs(defs, MAXR) : home_curate(defs, 7);
   live_refresh(0); if (live_catalogs() > 0) { int k = 0; for (int i = 0; i < n; i++) if (!live_type(defs[i].type)) defs[k++] = defs[i]; n = k; } /* the live catalogs: in the Live TV row's All channels, not as rows of posters */
   for (int i = 0; i < b->n; i++) itemlist_clear(&b->rows[i].list); memset(b->rows, 0, sizeof b->rows); b->n = n; b->gen++;
   for (int i = 0; i < n; i++) { b->rows[i].def = defs[i]; b->rows[i].retries = 0; b->rows[i].retryAt = 0; sb_catalog(&b->rows[i].def, got_row, (void *)(uintptr_t)((disc << 24) | (i << 8) | (b->gen & 255))); }
@@ -193,7 +212,13 @@ static void load(Board *b, int disc) {
 }
 static const Item *hero_item(Board *b) { for (int i = 0; i < b->n; i++) if (b->rows[i].list.n > 0 && (b->filter == 0 || !strcmp(b->rows[i].def.type, b->filter == 1 ? "series" : "movie"))) { b->heroRow = i; return &b->rows[i].list.items[0]; } return NULL; }
 static const Item *focused_item(void) { Board *b = me(); if (b->fr == -5) return ph_live_band_item(b->fi); if (b->fr == -2) return b->cw.n > b->fi ? &b->cw.items[b->fi] : NULL; if (b->fr == -4) return b->up.n > b->fi ? &b->up.items[b->fi] : NULL; if (b->fr == -3) return hero_item(b); if (b->fr >= 0 && b->fr < b->n && b->fi < b->rows[b->fr].list.n) return &b->rows[b->fr].list.items[b->fi]; return NULL; }
-static void focus(int r, int i) { Board *b = me(); b->fr = r; b->fi = i; const Item *it = focused_item(); if (it) { accent_tint_fetch(it->id, it->poster, it->logo); ph_logo_ahead(it); } } /* the title's colour is on its way before its page opens */
+static void focus(int r, int i) { Board *b = me(); b->fr = r; b->fi = i; const Item *it = focused_item(); if (it) { accent_tint_fetch(it->id, it->poster, it->logo); ph_logo_ahead(it); } }
+static void home_card_tap(int r, int i) {
+  Board *b = me();
+  if (!b || r < 0 || r >= b->n || i < 0 || i >= b->rows[r].list.n) return;
+  focus(r, i);
+  app_open_item(&b->rows[r].list.items[i]);
+} /* the title's colour is on its way before its page opens */
 static void hero_act(int a, int b2) { (void)b2; Board *b = me(); const Item *it = hero_item(b); if (!it) return;
   if (a == 1) { if (!strcmp(it->type, "series")) { DetailParams p; memset(&p, 0, sizeof p); p.it = *it; p.openStreams = 1; app_go(SCR_DETAIL, &p, 0); } else ph_streams_show(it, it->id, NULL); }
   else if (a == 2) { lib_toggle(it); toast(lib_has(it->id) ? T("Added to Library") : T("Removed from Library"), 1600, NULL); app_refresh_boards(); }
@@ -214,7 +239,7 @@ static void draw(void) {
   if (!disc) {
     float hh = SB_W * 0.86f + INS_T; char buf[600];
     const cJSON *hm = hi ? sb_meta_cached(hi->type, hi->id) : NULL; Item full; if (hm) { sb_fill_item(&full, hm, hi->type); if (!full.poster[0]) snprintf(full.poster, sizeof full.poster, "%s", hi->poster); } else if (hi) full = *hi;
-    const char *bg = hi ? sb_bg_mid(&full, buf, sizeof buf) : NULL; GLuint t = bg && *bg ? img_get_shaped(bg, (int)SB_W, (int)hh, 0, 1) : 0;
+    const char *bg = hi ? sb_bg_mid(&full, buf, sizeof buf) : NULL; char hiBg[600]; if (bg && *bg) { home_backdrop_url(bg, hiBg, sizeof hiBg); bg = hiBg; } GLuint t = bg && *bg ? img_get_shaped(bg, (int)SB_W, (int)hh, 0, 1) : 0;
     float py = y < 0 ? y * 0.5f : y; /* the cover moves at half the speed */
     /* as the page goes up, the cover dims, darkens at its edges and draws back a little; it fades in when it arrives */
     float gone = clampf(b->v.pos / (hh * 0.8f), 0, 1); static GLuint lastT; static Tween heroIn; if (t && t != lastT) { lastT = t; tween_set(&heroIn, 0); tween_to(&heroIn, 1, 0.6f, EASE_OUT); } tween_tick(&heroIn, phDt);
@@ -249,7 +274,7 @@ static void draw(void) {
   for (int i = 0; i < b->n; i++) { HRow *r = &b->rows[i]; b->lastY[i + 2] = y + b->v.pos - INS_T - 20;
     if (b->filter && strcmp(r->def.type, b->filter == 1 ? "series" : "movie")) continue;
     if (!r->got) { waiting++; continue; }
-    char t[200]; snprintf(t, sizeof t, "%s", T(r->def.title)); y += row_draw(t, &r->list, 0, y, &r->s, i, focus, b->fr == i ? b->fi : -1); }
+    char t[200]; snprintf(t, sizeof t, "%s", T(r->def.title)); y += row_draw_act(t, &r->list, 0, y, &r->s, i, focus, home_card_tap, b->fr == i ? b->fi : -1); }
   gfx_offset_pop();
   if (waiting) for (int k = 0; k < 2 && y < SB_H; k++) { ph_text(PAD, y + 10, 260, 1, F_H2 - 2, 40, ALIGN_START); for (int c = 0; c < 4; c++) ph_box(PAD + c * (POSTER_W + 14), y + 52, POSTER_W, POSTER_H, 14); y += 52 + POSTER_H + 36; }
   gfx_opacity_pop();
@@ -374,18 +399,21 @@ static void hc_option_act(int i, int b) {
   HC.menu = -1; hc_query();
 }
 static void hc_focus(int r, int i) { (void)r; HC.focus = i; if (i >= 0 && i < HC.shown.n) accent_tint_fetch(HC.shown.items[i].id, HC.shown.items[i].poster, HC.shown.items[i].logo); }
+static void hc_open_item(const Item *it);
+static void hc_tap(int r, int i) { hc_focus(r, i); if (i >= 0 && i < HC.shown.n) hc_open_item(&HC.shown.items[i]); }
+void ph_home_category_back(void) { app_overlay = NULL; HC.menu = -1; }
 static const Item *hc_focused(void) { return HC.focus >= 0 && HC.focus < HC.shown.n ? &HC.shown.items[HC.focus] : NULL; }
-static void hc_open_item(const Item *it) { if (it) app_open_item(it); }
+static void hc_open_item(const Item *it) { if (it) { Item copy = *it; app_overlay = NULL; app_open_item(&copy); } }
 static int hc_key(int k) {
   if (k == K_BACK) { app_overlay = NULL; HC.menu = -1; return 1; }
-  if (k == K_OK && hc_focused()) { app_open_item(hc_focused()); return 1; }
+  if (k == K_OK && hc_focused()) { hc_open_item(hc_focused()); return 1; }
   if (k == K_CH_UP) { scroll_top(&HC.scroll); return 1; }
   return 0;
 }
 static void hc_tick(float dt) { (void)dt; }
 static void hc_draw(void) {
   gfx_rect(0, 0, SB_W, SB_H, 0xff000000u);
-  top_bar(HC.title, 1, HC.scroll.pos);
+  top_bar(HC.title, 2, HC.scroll.pos);
   float top = phone_free_top() + 86, x = PAD, gap = 12;
   const char *g = HC.genre[0] ? T(HC.genre) : T("All genres");
   const char *yr = HC.year == 1 ? T("Classic") : HC.year == 2020 ? "2020–2023" : HC.year ? (HC.year == 2026 ? "2026" : HC.year == 2025 ? "2025" : "2024") : T("All years");
@@ -404,7 +432,7 @@ static void hc_draw(void) {
   float bottom = SB_H - INS_B - BAR_H - 24;
   ph_drag(0, gridY, SB_W, bottom - gridY, &HC.scroll, 1); scroll_tick(&HC.scroll);
   float gy = gridY + 12 - HC.scroll.pos;
-  float gh = poster_grid(&HC.shown, gy, hc_focus, 0, HC.focus);
+  float gh = poster_grid_act(&HC.shown, gy, hc_focus, hc_tap, 0, HC.focus);
   HC.scroll.max = fmaxf(0, gy + gh + HC.scroll.pos - bottom + 24);
   if (!HC.busy && HC.more && !HC.pageBusy && app_now() >= HC.pageRetryAt && HC.scroll.pos >= fmaxf(0, HC.scroll.max - 520)) {
     HC.pageBusy = 1; sb_catalog_page(&HC.query, HC.skip, hc_page_got, (void *)(uintptr_t)HC.gen);

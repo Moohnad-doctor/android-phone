@@ -13,12 +13,18 @@
 #include "ui/widgets.h"
 
 static void back_act(int a, int b) { (void)a; (void)b; app_back(); }
+static void category_back_act(int a, int b) { (void)a; (void)b; extern void ph_home_category_back(void); ph_home_category_back(); }
 void top_bar(const char *title, int back, float scrolled) {
   float base = phone_free_top(), h = base + 64, k = scrolled <= 0 ? 0 : scrolled > 120 ? 1 : scrolled / 120; k = k * k * (3 - 2 * k); /* eased: it comes in softly with the scroll */
   phone_top_glass(h, k);
   float x = PAD;
-  (void)back; if (0) { float bx = 10, by = INS_T + 10; /* (no back arrow: a page goes back by a swipe from its left edge, or the bar's Back) */ float pk = press_k(0, INS_T, 90, 88); if (pk > 0) gfx_circle(bx + 36, by + 34, 32, WHITE_A((int)(30 * pk)));
-    icon_draw("ph_back", bx + 16, by + 14, 40, WHITE_A(255)); hit_act(0, INS_T, 90, 88, back_act, 0, 0); x = 92; }
+  if (back) {
+    float bx = 10, by = INS_T + 10, pk = press_k(0, INS_T, 90, 88);
+    if (pk > 0) gfx_circle(bx + 36, by + 34, 32, WHITE_A((int)(30 * pk)));
+    icon_draw("ph_back", bx + 16, by + 14, 40, WHITE_A(255));
+    hit_act(0, INS_T, 90, 88, back == 2 ? category_back_act : back_act, 0, 0);
+    x = 92;
+  }
   if (title && *title) { float ta = title[0] == 1 ? k : 1; const char *t = title[0] == 1 ? title + 1 : title; /* a leading \001: the title comes in with the glass */
     if (ta > 0.01f) { gfx_opacity_push(ta); text_draw(t, x, base + 28 - text_line_height(F_H2) / 2.0f + 8 * (1 - ta), F_H2, 800, TXT, -0.3f, SB_W - x - PAD - 80, ALIGN_START); gfx_opacity_pop(); } }
 }
@@ -45,9 +51,10 @@ static Item phone_localized_item(const Item *src) {
 }
 void card_at(const Item *it, float x, float y, float w, float h, int wide, int label, unsigned long long key, int pressed) {
   if (x > SB_W || x + w < 0 || y > SB_H || y + h < 0) return;
-  int coll = !strcmp(it->type, "collection"); float hold = pressed && !coll ? app_hold_progress() : 0, r = wide ? 12 : 14; if (!pressed && press_k(x, y, w, h) > 0.2f) pressed = 1; /* (a collection: no hold's glow, it has no menu) */
+  int clean = label < 0; if (clean) pressed = 0;
+  int coll = !strcmp(it->type, "collection"); float hold = pressed && !coll ? app_hold_progress() : 0, r = wide ? 12 : 14; if (!clean && !pressed && press_k(x, y, w, h) > 0.2f) pressed = 1; /* (a collection: no hold's glow, it has no menu) */
   if (coll && pressed) x += app_card_shake_dx(); /* (held anyway: a short soft shake) */
-  lift_begin_z(key, pressed, hold, x, y, w, h, r, 0.04f);
+  if (!clean) lift_begin_z(key, pressed, hold, x, y, w, h, r, 0.04f);
   Item displayItem = phone_localized_item(it);
   CardPrep prep; card_prep(&prep, &displayItem, wide, NULL);
   /* sb_poster_of's legacy w342 downgrade softens phone-sized catalog posters.
@@ -65,8 +72,7 @@ void card_at(const Item *it, float x, float y, float w, float h, int wide, int l
     snprintf(prep.pre, sizeof prep.pre, "%s", prep.art);
   }
   card_draw_prep(&displayItem, &prep, x, y, w, h, wide, label, 1);
-  lift_end(key, x, y, w, h, r);
-  if (hold > 0) hold_trace_draw(x, y, w, h, r, hold);
+  if (!clean) { lift_end(key, x, y, w, h, r); if (hold > 0) hold_trace_draw(x, y, w, h, r, hold); }
 }
 
 /* a row that comes and goes (Continue Watching, Upcoming): emptied (its last card leaving), it closes, the rows under
@@ -79,7 +85,7 @@ float row_draw_k(const char *title, const ItemList *l, int wide, float y, Scroll
   if (e >= 0.999f) return row_draw(title, l, wide, y, s, rowIdx, focus, focusedIdx);
   gfx_clip_push(0, y, SB_W, full * e); gfx_opacity_push(e); row_draw(title, l, wide, y - (1 - e) * 30, s, rowIdx, focus, focusedIdx); gfx_opacity_pop(); gfx_clip_pop(); return full * e; }
 static void row_category_act(int row, int b) { (void)b; extern void ph_home_category_open(int); ph_home_category_open(row); }
-float row_draw(const char *title, const ItemList *l, int wide, float y, Scroll *s, int rowIdx, HitFn focus, int focusedIdx) {
+static float row_draw_impl(const char *title, const ItemList *l, int wide, float y, Scroll *s, int rowIdx, HitFn focus, HitFn act, int focusedIdx) {
   float cw = wide ? WIDE_CW * 1.30f : POSTER_W * 1.25f, ch = wide ? WIDE_CH * 1.30f : POSTER_H * 1.25f, gap = 14, top = 52;
   if (!l || l->n <= 0) return 0;
   if (y + top + ch < -10 || y > SB_H + 10) { scroll_tick(s); return top + ch + 36; }
@@ -100,12 +106,17 @@ float row_draw(const char *title, const ItemList *l, int wide, float y, Scroll *
   float acc = 0; for (int i = 0; i < l->n; i++) { float lk = l->items[i].cw || l->items[i].airAt > 0 ? leave_k(&l->items[i], 2) : 0, x = PAD + acc - s->pos; acc += (cw + gap) * (1 - lk); if (rtl) x = SB_W - x - cw; if (x > SB_W || x + cw < 0) continue;
     if (lk >= 0.999f) continue; if (lk > 0) { float k2 = 1 - 0.25f * lk; gfx_opacity_push(1 - lk); gfx_scale_push(k2, k2, x + cw / 2, y + top + ch / 2); } /* going: smaller and fainter, the next ones closing in */
     int pr = ph_pressed(x, y + top, cw, ch) || (focusedIdx == i && app_hold_progress() > 0);
-    card_at(&l->items[i], x, y + top, cw, ch, wide, wide, lift_key(l, i), pr);
-    if (lk > 0) { gfx_scale_pop(); gfx_opacity_pop(); } else hit_add(x, y + top, cw, ch, focus, NULL, rowIdx, i); }
+    card_at(&l->items[i], x, y + top, cw, ch, wide, rowIdx == -2 ? -1 : wide, lift_key(l, i), rowIdx == -2 ? 0 : pr);
+    if (lk > 0) { gfx_scale_pop(); gfx_opacity_pop(); } else hit_add(x, y + top, cw, ch, focus, act, rowIdx, i); }
   return top + ch + 36;
 }
-
-float poster_grid(const ItemList *l, float y, HitFn focus, int tag, int focusedIdx) {
+float row_draw(const char *title, const ItemList *l, int wide, float y, Scroll *s, int rowIdx, HitFn focus, int focusedIdx) {
+  return row_draw_impl(title, l, wide, y, s, rowIdx, focus, NULL, focusedIdx);
+}
+float row_draw_act(const char *title, const ItemList *l, int wide, float y, Scroll *s, int rowIdx, HitFn focus, HitFn act, int focusedIdx) {
+  return row_draw_impl(title, l, wide, y, s, rowIdx, focus, act, focusedIdx);
+}
+static float poster_grid_impl(const ItemList *l, float y, HitFn focus, HitFn act, int tag, int focusedIdx) {
   int cols = SB_W >= 1300 ? 6 : SB_W >= 1050 ? 5 : SB_W >= 860 ? 4 : 3; if (ph_tabw()) { int c = (int)((SB_W - 2 * PAD + 14) / (220 + 14) + 0.5f); cols = c > cols ? c : cols; } /* (a tablet sideways: posters of about 220, as many as fit) */ float gap = 14, w = (SB_W - 2 * PAD - gap * (cols - 1)) / cols, h = w * 1.5f; /* more across on a wider screen */
   float shift = 0; int lib = SCR == SCR_LIB; for (int i = 0; i < l->n; i++) { float lk = lib ? leave_k(&l->items[i], 1) : 0, f = i - shift; shift += lk; /* (a card going: the ones after slide back a place, along the grid) */
     int c0 = (int)floorf(f); float fr = f - c0; float x0 = PAD + (c0 % cols) * (w + gap), y0 = y + (c0 / cols) * (h + gap), x1 = PAD + ((c0 + 1) % cols) * (w + gap), y1 = y + ((c0 + 1) / cols) * (h + gap);
@@ -113,8 +124,14 @@ float poster_grid(const ItemList *l, float y, HitFn focus, int tag, int focusedI
     if (yy + h < 0 || yy > SB_H || lk >= 0.999f) continue;
     if (lk > 0) { float k2 = 1 - 0.25f * lk; gfx_opacity_push(1 - lk); gfx_scale_push(k2, k2, x + w / 2, yy + h / 2); }
     int pr = ph_pressed(x, yy, w, h) || (focusedIdx == i && app_hold_progress() > 0);
-    card_at(&l->items[i], x, yy, w, h, 0, 0, lift_key(l, i), pr); if (lk > 0) { gfx_scale_pop(); gfx_opacity_pop(); } else hit_add(x, yy, w, h, focus, NULL, tag, i); }
+    card_at(&l->items[i], x, yy, w, h, 0, 0, lift_key(l, i), pr); if (lk > 0) { gfx_scale_pop(); gfx_opacity_pop(); } else hit_add(x, yy, w, h, focus, act, tag, i); }
   return l->n ? ((l->n + cols - 1) / cols) * (h + gap) : 0;
+}
+float poster_grid(const ItemList *l, float y, HitFn focus, int tag, int focusedIdx) {
+  return poster_grid_impl(l, y, focus, NULL, tag, focusedIdx);
+}
+float poster_grid_act(const ItemList *l, float y, HitFn focus, HitFn act, int tag, int focusedIdx) {
+  return poster_grid_impl(l, y, focus, act, tag, focusedIdx);
 }
 
 int button(float x, float y, float w, float h, const char *icon, const char *label, int kind, HitFn act, int a, int b) {
