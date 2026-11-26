@@ -337,7 +337,9 @@ const Stream *best_pick(const Stream *const *list, int n, double durMin, const T
   if (!c) { c = best_caps(); if (!c) c = &FALLBACK; }
   if (mbps < 0) mbps = best_net_mbps();
   if (durMin <= 0) durMin = 100;
+#ifndef SB_PHONE
   int mx = c->maxRes ? c->maxRes : 1080;
+#endif
   BestRate *rs = n > 0 ? malloc(n * sizeof *rs) : NULL; int *tk = n > 0 ? malloc(n * sizeof *tk) : NULL, m = 0;
   for (int i = 0; i < n; i++) { int res = 0; int ok = list[i] && list[i]->url[0] && rate(list[i], c, mbps, durMin, &rs[m], &res);
     if (getenv("SB_BESTLOG") && list[i]) { char t[300]; best_stream_info(list[i], t, sizeof t); for (char *q = t; *q; q++) if (*q == '\n') *q = ' '; fprintf(stderr, "[bestlog] %s %s | %.170s%s\n", list[i]->p2p ? "p2p" : "direct", ok ? "ok" : "out", t, ok ? "" : ""); if (ok) fprintf(stderr, "[bestlog]   need %.1f cap %.1f mute %d sc %.0f res %d\n", rs[m].need, rs[m].cap, rs[m].mute, rs[m].sc, res); }
