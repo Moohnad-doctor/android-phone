@@ -661,7 +661,7 @@ void best_audio_for(const char *type, const char *vid, char *out, size_t cap) { 
 unsigned best_choose(const char *type, const char *vid, int durMin, BestStatusCb status, BestDoneCb done, void *ud) {
   static unsigned tokN; flow_end(); memset(&F, 0, sizeof F);
   { char au[16]; best_audio_for(type, vid, au, sizeof au); best_set_langs(au, store_get("subsLang", "")); } /* the audio language this title wants (as the player picks its track) and the subtitles' */
-  F.tok = ++tokN; F.ceil = capNext; capNext = 0; fDl = dlNext; dlNext = 0; limRes = nextRes; limHdr = nextHdr; nextMinRes = nextRes = 0; nextHdr = -1; F.on = 1; F.wait = -1; F.t0 = app_now(); F.dur = durMin > 0 ? durMin : 100; F.status = status; F.cb = done; F.ud = ud;
+  F.tok = ++tokN; F.ceil = capNext; capNext = 0; fDl = dlNext; dlNext = 0; limRes = nextRes; limHdr = nextHdr; nextRes = 0; nextHdr = -1; F.on = 1; F.wait = -1; F.t0 = app_now(); F.dur = durMin > 0 ? durMin : 100; F.status = status; F.cb = done; F.ud = ud;
   snprintf(F.type, sizeof F.type, "%s", type); snprintf(F.vid, sizeof F.vid, "%s", vid);
   unsigned tok = F.tok; say();
 #ifdef SB_PHONE
