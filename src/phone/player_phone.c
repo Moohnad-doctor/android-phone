@@ -613,7 +613,7 @@ void phone_player_draw(void) {
     gfx_rrect_v(0, 0, SB_W, 300, 0, BLACK_A(185), BLACK_A(0)); { float rw = SB_W * 0.62f, rh = 300; gfx_alpha_tex(gfx_radial_tex(), -rw, -rh, 2 * rw, 2 * rh, BLACK_A(95)); } /* a deeper shade at the top left, fading every way from the corner (a band with a hard edge at the middle before): the logo stands out on bright pictures */ gfx_rrect_v(0, SB_H - 380, SB_W, 380, 0, BLACK_A(0), BLACK_A(185));
     /* the top: slides up as it goes */
     gfx_offset_push(0, -(1 - a) * 150); gfx_opacity_push(1 - seekK.v);
-    hud_circle(64, TOPY, TOPR, "ph_back", 0, a_back, 0); /* Back stays top-left; title and episode move above the seek bar. */
+    hud_circle(64, TOPY, TOPR, "", 0, a_back, 0); icon_draw_rot("ph_chev", 64 - 13, TOPY - 13, 26, WHITE_A(245), 180); /* Back stays top-left; title and episode move above the seek bar. */
     { int cs = cast_icon_state(); if (cs == 0) gfx_opacity_push(0.5f); hud_circle(TVX, TOPY, TOPR, cs == 3 ? "ph_cast_on" : "ph_cast", 0, a_tv, 0); /* (connected: the TV-connected icon, nothing else) */ if (cs == 0) gfx_opacity_pop();
       if (cs == 2) { float ph = fmodf((float)app_now(), 1.2f) / 1.2f, rr = TOPR * 0.55f + 2.2f + 7.7f * ph; gfx_ring(TVX - rr, TOPY - rr, 2 * rr, 2 * rr, rr, 1.4f, col_alpha(ACC2 | 0xff000000u, 0.7f * (1 - ph))); } } hud_circle(LOCKX, TOPY, TOPR, "lock", 0, a_lock, 0);
     { Item it_; char v_[96]; const Stream *s_; if (player_now(&it_, v_, sizeof v_, &s_) && !strncmp(s_->url, "file:", 5)) { /* playing a download: where the download button would be, a quiet glass capsule saying it plays from the phone (no connection needed); a tap opens Downloads */
@@ -675,7 +675,7 @@ void phone_player_draw(void) {
     /* Nuvio-style bottom-left controls with comfortable touch targets. */
      gfx_opacity_push(1 - seekK.v);
      {
-       float cy = SB_H - 82.0f, r = 27.0f, x = 54.0f, step = 96.0f;
+       float cy = SB_H - 82.0f, r = TOPR, x = 54.0f, step = 96.0f;
        hud_circle(x, cy, r, "", panel == 3 || panel == 4, a_panel, 4);
        icon_draw("p_spk", x - 19, cy - 14, 28, WHITE_A(245)); icon_draw("p_cc", x + 1, cy - 13, 26, WHITE_A(245));
        text_draw(T("Audio"), x, cy + 39, 13, 650, WHITE_A(220), 0, 0, ALIGN_CENTER); pillR[4] = rect(x-r-8, cy-r-8, 2*r+16, 2*r+16); x += step;
@@ -738,12 +738,7 @@ void phone_player_draw(void) {
   if (jumpA.v > 0.01f) { float cx = jumpDir < 0 ? SB_W * 0.2f : SB_W * 0.8f, cy = SB_H / 2, r = 66 + 22 * (1 - jumpA.v); gfx_opacity_push(jumpA.v);
     gfx_circle(cx, cy, r, WHITE_A(36)); char t[16]; snprintf(t, sizeof t, "%s%d s", jumpDir < 0 ? "\xe2\x88\x92" : "+", seek_step() * jumps); text_draw(t, cx, cy - text_line_height(22) / 2.0f, 22, 800, WHITE_A(250), 0, 0, ALIGN_CENTER); gfx_opacity_pop();
     if (app_now() - jumpAt > 0.6) { tween_to(&jumpA, 0, 0.3f, EASE_CSS_EASE); if (jumpA.v < 0.02f) jumps = 0; } }
-  { extern int player_failed(void); static Tween hintA; int on = !player_live() && !player_failed() && !locked && app_now() - openAt > 1.2 && G.mode != 10 && !player_live_channel(); /* the loading: how to leave it, softly */
-    tween_to(&hintA, on ? 1 : 0, on ? 0.5f : 0.2f, EASE_CSS_EASE); tween_tick(&hintA, phDt);
-    if (hintA.v > 0.01f) { const char *ht = T("Swipe down to close"); float t = (float)app_now(), cx = SB_W / 2, y = 30 + 10 * (1 - hintA.v), ph = fmodf(t, 1.8f) / 1.8f; /* top middle, bare: a grabber that keeps pulling down, the words under it */
-      float pull = ph < 0.55f ? sinf(ph / 0.55f * (float)M_PI * 0.5f) : 1 - (ph - 0.55f) / 0.45f; pull = pull * pull * (3 - 2 * pull);
-      gfx_opacity_push(hintA.v); gfx_rrect(cx - 34, y + 2 + 12 * pull, 68, 7, 3.5f, BLACK_A(60)); gfx_rrect(cx - 34, y + 12 * pull, 68, 7, 3.5f, WHITE_A((int)(150 + 80 * (1 - pull))));
-      text_draw(ht, cx + 1, y + 34 + 1, 22, 600, BLACK_A(90), 0.8f, 0, ALIGN_CENTER); text_draw(ht, cx, y + 34, 22, 600, WHITE_A(200), 0.8f, 0, ALIGN_CENTER); gfx_opacity_pop(); } }
+  /* No swipe-down affordance: the loading splash must not suggest closing playback. */
   /* (swiped away: the page under comes up through it: app.c draws it over the film as closeShade grows) */
 }
 int phone_player_tap(float x, float y) { (void)x; (void)y; return 0; }
