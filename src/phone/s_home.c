@@ -30,6 +30,7 @@ static struct { Item it[NFEAT]; int n, load, gotM, gotS; ItemList m, sr; Scroll 
 /* the spotlight's picture kept while a page beside this one is shown (Settings, Library): swiped back to, it is there at
    once, never loaded again as it comes in (the pages' many posters would have pushed it out of the budget) */
 static char keepUrl[600]; static int keepW, keepH;
+static void home_backdrop_url(const char *src, char *out, size_t cap);
 void ph_home_keep(void) { if (keepUrl[0] && keepW > 0) img_get_shaped(keepUrl, keepW, keepH, 0, 1); }
 static int feat_keep(const Item *it) { return it->id[0] && (it->background[0] || it->poster[0]); }
 static void feat_from_rows(Board *b) { /* the spotlight from Home's own catalogs: the first titles of its rows, in turn */
