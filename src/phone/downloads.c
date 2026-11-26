@@ -479,7 +479,7 @@ static void on_best_done(const Stream *s, const BestRate *r, void *ud) { (void)r
 static void q_next(void) {
   if (qBusy) return; while (qAt < qN && (qIdx[qAt] >= nd || D[qIdx[qAt]].state != DL_CHOOSING)) qAt++;
   if (qAt >= qN) { qN = qAt = 0; return; }
-  int i = qIdx[qAt++]; qBusy = 1; { double mb; int res, hdr; ph_dl_prefs(&mb, &res, &hdr); best_cap_next(mb); best_limits_next(res, hdr); best_for_download_next(); } /* the settings' profile (or their own choices): its size an hour, its picture */
+  int i = qIdx[qAt++]; qBusy = 1; { double mb; int res, hdr; ph_dl_prefs(&mb, &res, &hdr); best_cap_next(mb); best_limits_next(1080, res, hdr); best_for_download_next(); } /* the settings' profile (or their own choices): its size an hour, its picture */
   best_choose(D[i].type, D[i].vid, strcmp(D[i].type, "series") ? 100 : 45, on_best_status, on_best_done, NULL); }
 static void q_push(int i) { if (qN < MAXQ) qIdx[qN++] = i; }
 int ph_dl_choosing(int *done, int *total, int *finished) { if (done) *done = qAt; if (total) *total = qN; if (finished) *finished = 0; return qN > 0; }

@@ -172,4 +172,5 @@ int   pplat_atv_pair_start(const char *ip, const char *name); /* 0: the TV shows
 int   pplat_atv_pair_finish(const char *code);                /* 0 paired, 1 not that code, -1 failed */
 void  pplat_atv_pair_close(void);
 int   pplat_progress(char *key, int cap, double *pos, double *dur, int *state);
+void  pplat_video_anime_settings(int enabled, int sharpen, int color_boost);
 #endif

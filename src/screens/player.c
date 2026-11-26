@@ -2782,7 +2782,8 @@ static void draw_art(void) {
   int ss = P.ssOn && !P.closing; /* the screensaver: the cover comes back brighter and drifts very slowly (26 s each way); the logo alone */
   gfx_rect(0, 0, SB_W, SB_H, PAGE);
   if (live_title()) live_backdrop(); /* a channel: its logo's own colours, never its logo blown up behind itself */
-  float asp; GLuint bg = P.bg[0] && !live_title() ? img_get(P.bg, 1280, 720, &asp) : 0; if (bg) { float u0, v0, u1, v1; img_cover_uv(asp, SB_W / SB_H, 1, &u0, &v0, &u1, &v1);
+  char bgFull[1200]; snprintf(bgFull, sizeof bgFull, "%s", P.bg); char *bm = strstr(bgFull, "/medium/"); if (bm) { size_t tail = strlen(bm + 8); memmove(bm + 10, bm + 8, tail + 1); memcpy(bm, "/original/", 10); }
+  float asp; GLuint bg = P.bg[0] && !live_title() ? img_get(bgFull, 1280, 720, &asp) : 0; if (bg) { float u0, v0, u1, v1; img_cover_uv(asp, SB_W / SB_H, 1, &u0, &v0, &u1, &v1);
     if (ss) { float ph = fmodf((float)(now_() - P.ssAt) / 26, 2), k = bez(C_INOUT, ph < 1 ? ph : 2 - ph), sc = 1.02f + 0.07f * k;
       gfx_scale_push(sc, sc, SB_W / 2, SB_H / 2); gfx_offset_push(SB_W * (-0.01f + 0.022f * k), SB_H * (-0.008f * k)); gfx_image(bg, 0, 0, SB_W, SB_H, 0, WHITE_A(199), u0, v0, u1, v1); gfx_offset_pop(); gfx_scale_pop(); }
     else gfx_image(bg, 0, 0, SB_W, SB_H, 0, WHITE_A(107), u0, v0, u1, v1); }

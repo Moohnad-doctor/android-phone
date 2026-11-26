@@ -51,7 +51,7 @@ static const Opt VOL[] __attribute__((unused)) = { { "10", "10%" }, { "20", "20%
 static const Opt ACCENTS[] = { { "logo", "From the logo" }, { "adaptive", "From the artwork" }, { "purple", "Purple" }, { "violet", "Violet" }, { "fuchsia", "Fuchsia" }, { "pink", "Pink" }, { "rose", "Rose" }, { "red", "Red" }, { "orange", "Orange" }, { "amber", "Amber" }, { "gold", "Gold" }, { "lime", "Lime" }, { "green", "Green" }, { "emerald", "Emerald" }, { "teal", "Teal" }, { "cyan", "Cyan" }, { "sky", "Sky" }, { "blue", "Blue" }, { "indigo", "Indigo" }, { "lavender", "Lavender" }, { "plum", "Plum" }, { "magenta", "Magenta" }, { "coral", "Coral" }, { "peach", "Peach" }, { "sand", "Sand" }, { "olive", "Olive" }, { "mint", "Mint" }, { "ocean", "Ocean" }, { "slate", "Slate" }, { "graphite", "Graphite" } };
 #define N(a) ((int)(sizeof(a) / sizeof(a)[0]))
 
-enum { P_MAIN = 0, P_PLAY, P_SUBS, P_AUDIO, P_LOOK, P_LANG, P_ADDONS, P_ABOUT, P_DL, P_TRAKT, P_N };
+enum { P_MAIN = 0, P_PLAY, P_SUBS, P_AUDIO, P_LOOK, P_LANG, P_ADDONS, P_ABOUT, P_DL, P_TRAKT, P_ANIME, P_N };
 typedef struct { int page; Scroll v[P_N]; int pickKey; const Opt *pickOpts; int pickN; char code[8]; double codeAt; int syncing; } St;
 static St S;
 static float rowY;
@@ -95,7 +95,8 @@ static float row_base(float y, const char *icon, uint32_t tint, const char *labe
 static void nav_row(float y, const char *icon, uint32_t tint, const char *label, const char *sub, int page) { rres = 80; row_base(y, icon, tint, label, sub, RH); icon_draw("ph_chev", gx + gw - 26 - 32, y + RH / 2 - 16, 32, WHITE_A(100)); hit_act(gx, y, gw, RH, page_act, page, 0); }
 /* a switch: the key holds "true" / "false" */
 static const char *swKeys[16]; static int nsw;
-static void sw_act(int i, int b) { (void)b; const char *k = swKeys[i]; int def = strcmp(k, "nerdStats") != 0 && strcmp(k, "dlWifi") != 0 && strcmp(k, "seekPreviewsTorrent") != 0; /* (the ones off unless switched on) */ store_set(k, store_bool(k, def) ? "false" : "true"); if (!strcmp(k, "accent")) accent_apply(); if (!strcmp(k, "dlHdr")) store_set("dlQuality", "custom");
+static void anime_apply(void) { pplat_video_anime_settings(store_bool("anime_enhance_enabled", 0), store_bool("anime_sharpen", 1), store_bool("anime_color_boost", 1)); }
+static void sw_act(int i, int b) { (void)b; const char *k = swKeys[i]; int def = strcmp(k, "nerdStats") != 0 && strcmp(k, "dlWifi") != 0 && strcmp(k, "seekPreviewsTorrent") != 0 && strcmp(k, "anime_enhance_enabled") != 0; /* (the ones off unless switched on) */ store_set(k, store_bool(k, def) ? "false" : "true"); if (!strcmp(k, "accent")) accent_apply(); if (!strcmp(k, "dlHdr")) store_set("dlQuality", "custom"); if (!strcmp(k, "anime_enhance_enabled") || !strcmp(k, "anime_sharpen") || !strcmp(k, "anime_color_boost")) { anime_apply(); store_flush(); }
   if (!strcmp(k, "traktRows") || !strcmp(k, "traktMarks") || !strcmp(k, "traktCw")) board_invalidate(); } /* (Trakt's rows, marks and pauses come and go on Home) */
 static void sw_row(float y, const char *label, const char *sub, const char *key, int def) { rres = 124; row_base(y, NULL, 0, label, sub, RH); switch_draw(gx + gw - 26 - 82, y + RH / 2 - 23, store_bool(key, def)); if (nsw < 16) { swKeys[nsw] = key; hit_act(gx, y, gw, RH, sw_act, nsw, 0); nsw++; } }
 /* a choice among options: a sheet */
@@ -397,7 +398,7 @@ static float main_list(float y) {
         icon_draw(in ? "st_out" : "ph_chev", bx - 20, by - 20, 40, in ? RGB(0xf0, 0x7a, 0x7a) : WHITE_A(240)); hit_act(bx - 44, by - 44, 88, 88, logout_act, 0, 0); y = grp_end(); }
   return y; }
 /* the first page as a picture under a sub-page being swiped away (nothing in it takes the finger) */
-static int page_parent(int p) { return p == P_SUBS || p == P_AUDIO ? P_PLAY : P_MAIN; } /* Subtitles and Audio live inside Playback */
+static int page_parent(int p) { return p == P_SUBS || p == P_AUDIO || p == P_ANIME ? P_PLAY : P_MAIN; } /* Subtitles and Audio live inside Playback */
 static void s_list(void) { float y = INS_T + 150 - S.v[P_MAIN].pos; nsw = nch = 0; phone_col_push(1100); main_list(y); phone_col_pop(); s_head(T("Settings"), S.v[P_MAIN].pos); } /* (in its column, as when shown: no jump as it lands) */
 /* a page's own rows (the list, Playback, Subtitles...): drawn where it is, or under the one swiped back from */
 /* Trakt: connected once with its device code (the code shown big, Trakt's page opened with it copied), then a switch
@@ -463,6 +464,13 @@ static float page_body(int pg, float y, const char **titleOut) { const char *tit
       nav_row(y, "st_subs", TINT_BLUE, T("Subtitles"), NULL, P_SUBS); y += RH;
       aud_row(y); y = grp_end(); /* (the audio language itself, no page of its own) */
       { static const Opt TC[] = { { "auto", "Automatic" }, { "tcp", "TCP only" } }; grp(y, 1); ch_row(y, T("Torrent connections"), NULL, "p2pTcpOnly", TC, N(TC), "auto"); y = grp_end(); } /* (TCP only: torrents on some mobile 4G / 5G routers) */
+      grp(y, 1); nav_row(y, "st_look", TINT_PURPLE, "تحسين الأنمي", NULL, P_ANIME); y = grp_end();
+      break; }
+    case P_ANIME: title = "تحسين الأنمي";
+      grp(y, 1); act_row(y, "ph_back", TINT_GREY, "رجوع إلى التشغيل", NULL, page_act, P_PLAY); y = grp_end();
+      grp(y, 3); sw_row(y, "تفعيل تحسين الأنمي", "تطبيق الفلاتر على كل مسارات تشغيل libVLC", "anime_enhance_enabled", 0); y += RH;
+      sw_row(y, "وضوح الخطوط (Sharpen)", NULL, "anime_sharpen", 1); y += RH;
+      sw_row(y, "تحسين الألوان (Adjust)", NULL, "anime_color_boost", 1); y = grp_end();
       break; }
     case P_SUBS: title = T("Subtitles"); y = sub_preview(y); grp(y, 11);
       ch_row(y, T("Default subtitles"), NULL, "subsLang", LANGS, N(LANGS), ""); y += RH;

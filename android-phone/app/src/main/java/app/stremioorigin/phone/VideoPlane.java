@@ -36,6 +36,16 @@ public final class VideoPlane {
     private static volatile long state, pos, dur, vw, vh, live; private static volatile float buffering = 100;
     private static volatile long posAt; /* when pos was read: the native side moves it on between reads */
     private static volatile String error = "";
+    private static volatile boolean animeEnhanceEnabled, animeSharpen = true, animeColorBoost = true;
+    public static void setAnimeEnhancement(boolean enabled, boolean sharpen, boolean colorBoost) { animeEnhanceEnabled = enabled; animeSharpen = sharpen; animeColorBoost = colorBoost; }
+    private static void animeOptions(Media media) {
+        if (!animeEnhanceEnabled) return;
+        String filters = animeColorBoost && animeSharpen ? "adjust,sharpen" : animeColorBoost ? "adjust" : animeSharpen ? "sharpen" : "";
+        if (filters.isEmpty()) return;
+        media.addOption(":video-filter=" + filters);
+        if (animeSharpen) media.addOption(":sharpen-sigma=0.8");
+        if (animeColorBoost) { media.addOption(":contrast=1.08"); media.addOption(":saturation=1.12"); media.addOption(":brightness=1.0"); media.addOption(":gamma=1.0"); }
+    }
     private static int wx, wy, ww, wh, spuWanted = -2, retries; private static String lastUrl;
 
     /* A stream that stops answering holds libVLC's stop() until its network read gives up (minutes on a stalled live
@@ -184,7 +194,7 @@ public final class VideoPlane {
     static volatile boolean liveSrc; /* a live broadcast: opened again, it joins it where it is now */
     private static void reopen(long atMs) { if (player == null || lastUrl == null) return; int spu = spuWanted; open(lastUrl, liveSrc ? 0 : atMs); if (spu != -2) { spuWanted = spu; } }
     private static void open(String url, long startMs) {
-        Media m = new Media(vlc, Uri.parse(url)); m.setHWDecoderEnabled(!swDecode, false); if (url.startsWith("file:")) m.addOption(":file-caching=150");
+        Media m = new Media(vlc, Uri.parse(url)); animeOptions(m); m.setHWDecoderEnabled(!swDecode, false); if (url.startsWith("file:")) m.addOption(":file-caching=150");
         m.addOption(":http-user-agent=StremioOrigin/0.1 (Android; phone)"); m.addOption(":sub-language=none"); m.addOption(":sub-track=-1");
         m.addOption(":http-reconnect"); if (startMs > 0) m.addOption(":start-time=" + (startMs / 1000.0));
         fresh(); if (player == null) { m.release(); return; } player.setMedia(m); m.release(); player.play();
@@ -200,7 +210,7 @@ public final class VideoPlane {
     public static void load(final String url, final String headers, final long startMs) {
         userPaused = false; run(() -> { lastUrl = url; retries = 0; stalls = 0;
             ensure(); if (player == null) return; fresh(); if (player == null) return; /* (the stream before let go off the main thread) */
-            Media m = new Media(vlc, Uri.parse(url));
+            Media m = new Media(vlc, Uri.parse(url)); animeOptions(m);
             swDecode = false; placeView(); m.setHWDecoderEnabled(true, false);
             m.addOption(":http-user-agent=StremioOrigin/0.1 (Android; phone)");
             m.addOption(":sub-language=none"); m.addOption(":sub-track=-1"); /* no subtitles of its own choosing: the player shows the ones you picked */

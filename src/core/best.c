@@ -217,7 +217,7 @@ static int lang_score(const char *raw, const char *l) { int ia = lang_index(pref
 #ifdef SB_PHONE
 static int panel_res(void) { static int pl; if (!pl) { extern int plat_panel_lines(void); int L = plat_panel_lines(); pl = L >= 2000 ? 2160 : L >= 1000 ? 1080 : L > 0 ? 720 : 1080; } return pl; } /* the phone's panel as a resolution class */
 #endif
-static int rateDl; /* choosing for a download: a torrent need not keep up in real time, but its swarm must last the whole file */
+static int rateDl, limMinRes, limMinHdr; /* strict resolution/HDR floor shared by rate() and best_pick() */
 static int rate(const Stream *s, const TvCaps *c, double mbps, double dur, BestRate *o, int *resOut) {
   char t[2048], l[2048]; best_stream_info(s, t, sizeof t); lower(t, l, sizeof l); blank(l, "._-[]()");
   int p2p = s->p2p;
@@ -229,6 +229,8 @@ static int rate(const Stream *s, const TvCaps *c, double mbps, double dur, BestR
   const char *rl = best_res_of(t); int r = res_n(rl), rr = r ? r : 720; char hd[32], au[32], a0[32]; best_hdr_of(t, hd, sizeof hd); best_audio_of(t, au, sizeof au);
   snprintf(a0, sizeof a0, "%s", au); { char *sp = strchr(a0, ' '); if (sp) *sp = 0; }
   if (r > (c->maxRes ? c->maxRes : 1080)) return 0; /* above the panel's resolution: the TV fails to play it */
+  if (limMinRes > 0 && rr < limMinRes) return 0;
+  if (limMinHdr && !hd[0]) return 0;
 #ifdef SB_PHONE
   int panel = panel_res(); /* a phone: the picture as its own panel shows it (a 720-line screen gains nothing from 1080p but a little sharpness) */
   int over = rr > panel; double sc = by_res(over ? panel : rr, 400, 340, 300, 200, 80) + (over ? 6 : 0);
@@ -599,8 +601,8 @@ static int pack_like(const Stream *s, int se, int ep) {
   for (size_t i = 0; i < sizeof w / sizeof *w; i++) if (strstr(l, w[i])) return 1;
   for (const char *p = l; (p = strchr(p, 's')); p++) if (is_dig((unsigned char)p[1]) && (p == l || !wch((unsigned char)p[-1]))) { const char *q = p + 1; while (is_dig((unsigned char)*q)) q++; if (*q != 'e') return 1; } /* "S02" alone, "S01-S03" */
   return 0; }
-static int limRes, limHdr = -1, nextRes, nextHdr = -1; /* a download's own limits, for the next choice */
-void best_limits_next(int maxRes, int hdr) { nextRes = maxRes; nextHdr = hdr; }
+static int limRes, limHdr = -1, nextMinRes, nextRes, nextHdr = -1;
+void best_limits_next(int minRes, int maxRes, int hdr) { nextMinRes = minRes; nextRes = maxRes; nextHdr = hdr; }
 static struct { double ceil; unsigned tok; int on, done, fin, wait, said3, t12, t30, dur, speedWait; double t0; char type[16], vid[80]; Stream *all; int n, cap; BestStatusCb status; BestDoneCb cb; void *ud; } F;
 int best_choosing(void) { return F.on; }
 static void flow_end(void) { F.on = 0; free(F.all); F.all = NULL; F.n = F.cap = 0; }
@@ -665,7 +667,7 @@ void best_audio_for(const char *type, const char *vid, char *out, size_t cap) { 
 unsigned best_choose(const char *type, const char *vid, int durMin, BestStatusCb status, BestDoneCb done, void *ud) {
   static unsigned tokN; flow_end(); memset(&F, 0, sizeof F);
   { char au[16]; best_audio_for(type, vid, au, sizeof au); best_set_langs(au, store_get("subsLang", "")); } /* the audio language this title wants (as the player picks its track) and the subtitles' */
-  F.tok = ++tokN; F.ceil = capNext; capNext = 0; fDl = dlNext; dlNext = 0; limRes = nextRes; limHdr = nextHdr; nextRes = 0; nextHdr = -1; F.on = 1; F.wait = -1; F.t0 = app_now(); F.dur = durMin > 0 ? durMin : 100; F.status = status; F.cb = done; F.ud = ud;
+  F.tok = ++tokN; F.ceil = capNext; capNext = 0; fDl = dlNext; dlNext = 0; limMinRes = nextMinRes > 0 ? nextMinRes : atoi(store_get("bestMinRes", "1080")); limMinHdr = store_bool("bestRequireHdr", 1); limRes = nextRes; limHdr = nextHdr; nextMinRes = nextRes = 0; nextHdr = -1; F.on = 1; F.wait = -1; F.t0 = app_now(); F.dur = durMin > 0 ? durMin : 100; F.status = status; F.cb = done; F.ud = ud;
   snprintf(F.type, sizeof F.type, "%s", type); snprintf(F.vid, sizeof F.vid, "%s", vid);
   unsigned tok = F.tok; say();
 #ifdef SB_PHONE
