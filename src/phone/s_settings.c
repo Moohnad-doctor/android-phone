@@ -471,7 +471,7 @@ static float page_body(int pg, float y, const char **titleOut) { const char *tit
       grp(y, 3); sw_row(y, "تفعيل تحسين الأنمي", "تطبيق الفلاتر على كل مسارات تشغيل libVLC", "anime_enhance_enabled", 0); y += RH;
       sw_row(y, "وضوح الخطوط (Sharpen)", NULL, "anime_sharpen", 1); y += RH;
       sw_row(y, "تحسين الألوان (Adjust)", NULL, "anime_color_boost", 1); y = grp_end();
-      break; }
+      break;
     case P_SUBS: title = T("Subtitles"); y = sub_preview(y); grp(y, 11);
       ch_row(y, T("Default subtitles"), NULL, "subsLang", LANGS, N(LANGS), ""); y += RH;
       { static const Opt SM[] = { { "all", "All subtitles" }, { "forced", "Forced only" } }; ch_row(y, T("Subtitle preference"), NULL, "subsMode", SM, N(SM), "all"); y += RH; } /* (PR #50, from LG: a forced track only, the lines in another language and the signs) */
