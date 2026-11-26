@@ -524,7 +524,7 @@ static void notice_draw(float osd) {
   extern const char *player_title_id(void); const char *id = player_title_id();
   if (strcmp(id, PGN.id)) { snprintf(PGN.id, sizeof PGN.id, "%s", id); PGN.at = 0; PGN.g.n = 0; PGN.sess++; tween_set(&PGN.a, 0); }
   static unsigned asked; if (asked != PGN.sess && player_live() && !player_is_trailer() && !strncmp(id, "tt", 2)) { asked = PGN.sess; parental_get(id, on_pgn, (void *)(uintptr_t)PGN.sess); }
-  int on = PGN.at > 0 && app_now() - PGN.at < 5.0 && !panel && posA.to < 0.5f;
+  int on = PGN.at > 0 && player_time() < 5.0 && !panel && posA.to < 0.5f;
   tween_to(&PGN.a, on ? 1 : 0, on ? 0.28f : 0.45f, EASE_CSS_EASE); tween_tick(&PGN.a, phDt);
   if (PGN.a.v < 0.004f || !PGN.g.n) return;
   float x = SB_W - 34, y = 26 + osd * 126.0f, rowH = 42.0f;

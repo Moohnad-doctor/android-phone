@@ -31,14 +31,13 @@ static int cmp_ep(const void *a, const void *b) { const Ep *x = a, *y = b; if ((
 static void detail_backdrop_url(const char *src, char *out, size_t cap) {
   if (!cap) return;
   snprintf(out, cap, "%s", src ? src : "");
-  char *p = strstr(out, "/small/");
-  if (p) memcpy(p, "/large/", 7);
-  else if ((p = strstr(out, "/medium/")) != NULL) { memmove(p + 10, p + 8, strlen(p + 8) + 1); memcpy(p, "/original/", 10); }
-  else {
-    static const char *const sizes[] = { "/w300/", "/w500/", "/w780/" };
-    for (int i = 0; i < 3; i++) if ((p = strstr(out, sizes[i])) != NULL) {
-      memmove(p + 7, p + 6, strlen(p + 6) + 1); memcpy(p, "/w1280/", 7); break;
-    }
+  if (strstr(out, "images.metahub.space/background/")) {
+    char *p = strstr(out, "/background/small/");
+    if (p) memcpy(p, "/background/large/", 18);
+    else if ((p = strstr(out, "/background/medium/")) != NULL) { memmove(p + 18, p + 19, strlen(p + 19) + 1); memcpy(p, "/background/large/", 18); }
+  } else if ((strstr(out, "image.tmdb.org/t/p/")) != NULL) {
+    char *p = strstr(out, "image.tmdb.org/t/p/") + strlen("image.tmdb.org/t/p/"), *slash = strchr(p, '/');
+    if (slash && strncmp(p, "original", 8) && strncmp(p, "w1280", 5)) { char tail[512]; snprintf(tail, sizeof tail, "%s", slash); snprintf(p, cap - (size_t)(p - out), "w1280%s", tail); }
   }
 }
 static int is_series(void) { return D.ne > 0; }
@@ -299,7 +298,7 @@ static void draw(void) { ph_fly_ready(&D.it);
   ph_drag(0, 0, SB_W, SB_H - INS_B - BAR_H, &D.v, 1); scroll_tick(&D.v);
   int wide = SB_W > SB_H; /* sideways (a tablet held flat), as on the TV: the picture fills the screen, the name, facts, pills and story on it */
   float y0 = -D.v.pos, coverH = SB_W * 9 / 16 + INS_T + 20; if (coverH > SB_H * 0.62f) coverH = SB_H * 0.62f; if (wide) coverH = SB_H; char buf[600];
-  const char *bg = sb_bg_mid(&D.it, buf, sizeof buf); char hiBg[600]; if (bg && *bg) { detail_backdrop_url(bg, hiBg, sizeof hiBg); bg = hiBg; } GLuint tex = bg && *bg ? img_get_shaped(bg, (int)SB_W, (int)coverH, 0, 1) : 0;
+  const char *bg = sb_bg_mid(&D.it, buf, sizeof buf); if (!D.it.background[0] && !sb_is_imdb(D.it.id)) bg = NULL; char hiBg[600]; if (bg && *bg) { detail_backdrop_url(bg, hiBg, sizeof hiBg); bg = hiBg; } GLuint tex = bg && *bg ? img_get_shaped(bg, (int)SB_W, (int)coverH, 0, 1) : 0;
   float py = y0 * 0.5f; if (py > 0) py = 0;
   if (!tex || !ph_picture(tex, 0, py, SB_W, coverH + (py < 0 ? 0 : 0), 0, WHITE_A(255))) ph_box(0, py, SB_W, coverH, 0);
   gfx_rrect_v(0, py + coverH * 0.3f, SB_W, coverH * 0.7f + 2, 0, col_alpha(PAGE | 0xff000000u, 0), PAGE | 0xff000000u);

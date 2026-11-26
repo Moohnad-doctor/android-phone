@@ -142,14 +142,13 @@ static void got_row(ItemList *l, int cached, void *ud) { (void)cached; unsigned 
 static void home_backdrop_url(const char *src, char *out, size_t cap) {
   if (!cap) return;
   snprintf(out, cap, "%s", src ? src : "");
-  char *p = strstr(out, "/small/");
-  if (p) memcpy(p, "/large/", 7);
-  else if ((p = strstr(out, "/medium/")) != NULL) { memmove(p + 10, p + 8, strlen(p + 8) + 1); memcpy(p, "/original/", 10); }
-  else {
-    static const char *const sizes[] = { "/w300/", "/w500/", "/w780/" };
-    for (int i = 0; i < 3; i++) if ((p = strstr(out, sizes[i])) != NULL) {
-      memmove(p + 7, p + 6, strlen(p + 6) + 1); memcpy(p, "/w1280/", 7); break;
-    }
+  if (strstr(out, "images.metahub.space/background/")) {
+    char *p = strstr(out, "/background/small/");
+    if (p) memcpy(p, "/background/large/", 18);
+    else if ((p = strstr(out, "/background/medium/")) != NULL) { memmove(p + 18, p + 19, strlen(p + 19) + 1); memcpy(p, "/background/large/", 18); }
+  } else if ((strstr(out, "image.tmdb.org/t/p/")) != NULL) {
+    char *p = strstr(out, "image.tmdb.org/t/p/") + strlen("image.tmdb.org/t/p/"), *slash = strchr(p, '/');
+    if (slash && strncmp(p, "original", 8) && strncmp(p, "w1280", 5)) { char tail[512]; snprintf(tail, sizeof tail, "%s", slash); snprintf(p, cap - (size_t)(p - out), "w1280%s", tail); }
   }
 }
 static int home_has(const char *s, const char *needle) {
