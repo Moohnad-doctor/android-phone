@@ -567,8 +567,8 @@ static void title_draw(float x, float maxW, float ty) {
 }
 
 static float barY(void) { return SB_H - 168; } /* (the pills under it at SB_H - 118) */
-static float barX0(void) { return 160; }
-static float barX1(void) { return SB_W - 160; }
+static float barX0(void) { return 40; }
+static float barX1(void) { return SB_W - 40; }
 /* ---- skip intro / recap, and at the credits: watch them or the next episode, bottom right (over the bar when the
    controls are up, near the edge when not); the one that acts by itself fills up as it counts down ---- */
 extern int player_prompt(const char **b0, const char **b1, float *fill); extern void player_prompt_go(int i);
@@ -653,7 +653,7 @@ void phone_player_draw(void) {
     int lv = live_now(); /* a live broadcast: LIVE in red where the time left was, the bar full, no knob */
     char tl[24], tr[24]; fmt(t, tl, sizeof tl); fmt(d > t ? d - t : 0, tr + 1, sizeof tr - 1); tr[0] = '-'; if (d <= 0) snprintf(tr, sizeof tr, "--:--");
     if (lv) { snprintf(tr, sizeof tr, "%s", T("LIVE")); text_draw(tr, x1 + 13.2f, by - text_line_height(8) / 2.0f + 1.1f,8, 800, RGB(0xff, 0x4d, 0x4d), 0.5f, 0, ALIGN_START); }
-    else { char total[24], stamp[64]; fmt(d, total, sizeof total); snprintf(stamp, sizeof stamp, "%s / %s", tl, total); text_draw(stamp, x1, by + 20, 19, 700, WHITE_A(220), 0, 0, ALIGN_END); }
+    else { char total[24], stamp[64]; fmt(d, total, sizeof total); snprintf(stamp, sizeof stamp, "%s / %s", tl, total); text_draw(stamp, x0, by - 54, 19, 700, WHITE_A(220), 0, 0, ALIGN_START); }
     float pd = d > 0 ? clampf((float)(t / d), 0, 1) : 0;
     if (lv) { gfx_rrect(x0, by - 2.75f, bw, 5.5f, 2.75f, RGB(0xff, 0x4d, 0x4d)); } else {
     float pb = d > 0 ? (float)(player_buffered() / d) : 0; pb = clampf(pb, 0, 1); float th = 5.5f;

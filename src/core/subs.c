@@ -40,6 +40,35 @@ static int utf8_ok(const unsigned char *b, size_t n) {
     i += k + 1; }
   return 1;
 }
+static unsigned cp1252_reverse(unsigned c) {
+  if (c <= 0xff) return c;
+  switch (c) {
+    case 0x20ac: return 0x80; case 0x201a: return 0x82; case 0x0192: return 0x83;
+    case 0x201e: return 0x84; case 0x2026: return 0x85; case 0x2020: return 0x86;
+    case 0x2021: return 0x87; case 0x02c6: return 0x88; case 0x2030: return 0x89;
+    case 0x0160: return 0x8a; case 0x2039: return 0x8b; case 0x0152: return 0x8c;
+    case 0x017d: return 0x8e; case 0x2018: return 0x91; case 0x2019: return 0x92;
+    case 0x201c: return 0x93; case 0x201d: return 0x94; case 0x2022: return 0x95;
+    case 0x2013: return 0x96; case 0x2014: return 0x97; case 0x02dc: return 0x98;
+    case 0x2122: return 0x99; case 0x0161: return 0x9a; case 0x203a: return 0x9b;
+    case 0x0153: return 0x9c; case 0x017e: return 0x9e; case 0x0178: return 0x9f;
+    default: return 0x100;
+  }
+}
+static size_t repair_mojibake(char *s, size_t n) {
+  int marker = 0; for (size_t i = 0; i + 1 < n; i++) if ((unsigned char)s[i] == 0xc3 && ((unsigned char)s[i + 1] == 0x98 || (unsigned char)s[i + 1] == 0x99)) { marker = 1; break; }
+  if (!marker) return n; unsigned char *tmp = malloc(n + 1); if (!tmp) return n;
+  size_t i = 0, o = 0; int ok = 1;
+  while (i < n) { unsigned c = (unsigned char)s[i++], cp = c;
+    if (c >= 0xc2 && c <= 0xdf && i < n) cp = ((c & 31u) << 6) | ((unsigned char)s[i++] & 63u);
+    else if (c >= 0xe0 && c <= 0xef && i + 1 < n) { cp = ((c & 15u) << 12) | (((unsigned char)s[i] & 63u) << 6) | ((unsigned char)s[i + 1] & 63u); i += 2; }
+    else if (c >= 0xf0 && c <= 0xf4 && i + 2 < n) { cp = ((c & 7u) << 18) | (((unsigned char)s[i] & 63u) << 12) | (((unsigned char)s[i + 1] & 63u) << 6) | ((unsigned char)s[i + 2] & 63u); i += 3; }
+    else if (c >= 0x80) { ok = 0; break; }
+    unsigned b = cp1252_reverse(cp); if (b > 255) { ok = 0; break; } tmp[o++] = (unsigned char)b;
+  }
+  if (!ok || !utf8_ok(tmp, o)) { free(tmp); return n; }
+  memcpy(s, tmp, o); s[o] = 0; free(tmp); return o;
+}
 /* subtitle files come in whatever their authors saved: UTF-16 (with a BOM, or told by its zero bytes), UTF-8 (BOM or not),
    else the Windows code page of the subtitle's language (lang: a three-letter code, NULL when unknown: the text tells;
    see textenc.c). Line ends become "\n" whatever they were. malloc'd */
@@ -57,6 +86,7 @@ static char *to_text(const unsigned char *b, size_t n, const char *lang) {
   else if (utf8_ok(b, n)) { for (size_t i = 0; i < n; i++) if (b[i]) out[o++] = (char)b[i]; }
   else { int cp = textenc_pick(b, n, lang); for (size_t i = 0; i < n; i++) if (b[i]) o += put_utf8(out + o, textenc_char(cp, b[i])); }
   out[o] = 0;
+  if (be < 0) o = repair_mojibake(out, o);
   size_t w = 0; for (size_t i = 0; i < o; i++) { if (out[i] == '\r') { out[w++] = '\n'; if (out[i + 1] == '\n') i++; } else out[w++] = out[i]; }
   out[w] = 0; return out;
 }

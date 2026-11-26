@@ -404,7 +404,7 @@ static void hc_open_item(const Item *it);
 static void hc_tap(int r, int i) { hc_focus(r, i); if (i >= 0 && i < HC.shown.n) hc_open_item(&HC.shown.items[i]); }
 void ph_home_category_back(void) { app_overlay = NULL; HC.menu = -1; }
 static const Item *hc_focused(void) { return HC.focus >= 0 && HC.focus < HC.shown.n ? &HC.shown.items[HC.focus] : NULL; }
-static void hc_open_item(const Item *it) { if (it) { Item copy = *it; app_overlay = NULL; app_open_item(&copy); } }
+static void hc_open_item(const Item *it) { if (it) { DetailParams p; memset(&p, 0, sizeof p); p.it = *it; app_overlay = NULL; app_go(SCR_DETAIL, &p, 0); } }
 static int hc_key(int k) {
   if (k == K_BACK) { app_overlay = NULL; HC.menu = -1; return 1; }
   if (k == K_OK && hc_focused()) { hc_open_item(hc_focused()); return 1; }

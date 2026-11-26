@@ -76,6 +76,8 @@ public final class VideoPlane {
         ArrayList<String> o = new ArrayList<>();
         o.add("--audio-time-stretch"); o.add("--avcodec-skiploopfilter=0"); o.add("--avcodec-skip-frame=0"); o.add("--avcodec-skip-idct=0"); o.add("--no-avcodec-corrupted"); /* (the edges of the blocks smoothed; a picture missing what it is built on is dropped, never shown as coloured blocks: a start, a seek, a torrent catching up) */
         o.add("--network-caching=1500"); o.add("--deinterlace=0"); o.add("--no-sub-autodetect-file");
+        o.add("--subsdec-encoding=UTF-8");
+        o.add("--freetype-font=/system/fonts/NotoNaskhArabicUI-Regular.ttf");
         o.add("--freetype-rel-fontsize=16"); o.add("--freetype-color=16777215"); o.add("--freetype-background-opacity=0");
         vlc = new LibVLC(a, o);
         events = ev -> {

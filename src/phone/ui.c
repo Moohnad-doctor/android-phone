@@ -17,13 +17,14 @@ static void category_back_act(int a, int b) { (void)a; (void)b; extern void ph_h
 void top_bar(const char *title, int back, float scrolled) {
   float base = phone_free_top(), h = base + 64, k = scrolled <= 0 ? 0 : scrolled > 120 ? 1 : scrolled / 120; k = k * k * (3 - 2 * k); /* eased: it comes in softly with the scroll */
   phone_top_glass(h, k);
-  float x = PAD;
+  int rtl = app_rtl(); float x = PAD;
   if (back) {
-    float bx = 10, by = INS_T + 10, pk = press_k(0, INS_T, 90, 88);
+    float bx = rtl ? SB_W - 82 : 10, by = INS_T + 10, hx = rtl ? SB_W - 90 : 0;
+    float pk = press_k(hx, INS_T, 90, 88);
     if (pk > 0) gfx_circle(bx + 36, by + 34, 32, WHITE_A((int)(30 * pk)));
-    icon_draw("ph_back", bx + 16, by + 14, 40, WHITE_A(255));
-    hit_act(0, INS_T, 90, 88, back == 2 ? category_back_act : back_act, 0, 0);
-    x = 92;
+    icon_draw_rot("ph_back", bx + 16, by + 14, 40, WHITE_A(255), rtl ? 180 : 0);
+    hit_act(hx, INS_T, 90, 88, back == 2 ? category_back_act : back_act, 0, 0);
+    x = rtl ? PAD : 92;
   }
   if (title && *title) { float ta = title[0] == 1 ? k : 1; const char *t = title[0] == 1 ? title + 1 : title; /* a leading \001: the title comes in with the glass */
     if (ta > 0.01f) { gfx_opacity_push(ta); text_draw(t, x, base + 28 - text_line_height(F_H2) / 2.0f + 8 * (1 - ta), F_H2, 800, TXT, -0.3f, SB_W - x - PAD - 80, ALIGN_START); gfx_opacity_pop(); } }
@@ -119,7 +120,7 @@ float row_draw_act(const char *title, const ItemList *l, int wide, float y, Scro
 static float poster_grid_impl(const ItemList *l, float y, HitFn focus, HitFn act, int tag, int focusedIdx) {
   int cols = SB_W >= 1300 ? 6 : SB_W >= 1050 ? 5 : SB_W >= 860 ? 4 : 3; if (ph_tabw()) { int c = (int)((SB_W - 2 * PAD + 14) / (220 + 14) + 0.5f); cols = c > cols ? c : cols; } /* (a tablet sideways: posters of about 220, as many as fit) */ float gap = 14, w = (SB_W - 2 * PAD - gap * (cols - 1)) / cols, h = w * 1.5f; /* more across on a wider screen */
   float shift = 0; int lib = SCR == SCR_LIB; for (int i = 0; i < l->n; i++) { float lk = lib ? leave_k(&l->items[i], 1) : 0, f = i - shift; shift += lk; /* (a card going: the ones after slide back a place, along the grid) */
-    int c0 = (int)floorf(f); float fr = f - c0; float x0 = PAD + (c0 % cols) * (w + gap), y0 = y + (c0 / cols) * (h + gap), x1 = PAD + ((c0 + 1) % cols) * (w + gap), y1 = y + ((c0 + 1) / cols) * (h + gap);
+    int c0 = (int)floorf(f); float fr = f - c0; int cA = c0 % cols, cB = (c0 + 1) % cols; if (app_rtl()) { cA = cols - 1 - cA; cB = cols - 1 - cB; } float x0 = PAD + cA * (w + gap), y0 = y + (c0 / cols) * (h + gap), x1 = PAD + cB * (w + gap), y1 = y + ((c0 + 1) / cols) * (h + gap);
     float x = x0 + (x1 - x0) * fr, yy = y0 + (y1 - y0) * fr;
     if (yy + h < 0 || yy > SB_H || lk >= 0.999f) continue;
     if (lk > 0) { float k2 = 1 - 0.25f * lk; gfx_opacity_push(1 - lk); gfx_scale_push(k2, k2, x + w / 2, yy + h / 2); }

@@ -712,12 +712,24 @@ static void on_adx(SubEntry *subs, int n, int final, int ok, void *ud) {
 static int hashable(const char *u) { return !strncmp(u, "http", 4) && !strstr(u, ".m3u8"); }
 static char artName[256], artPoster[512], artBg[512], artLogo[512]; /* the next play's title and pictures as handed over (a phone's) */
 static SubEntry castSubs[16]; static int castSubsN = -1; /* the next play's subtitles as a phone sent them (-1: none sent) */
+static void opensubtitles_video_id(char *out, size_t cap) {
+  const char *imdb = js_str(P.meta, "imdb_id", js_str(P.meta, "imdbId", js_str(P.meta, "imdb", "")));
+  if (!sb_is_imdb(imdb)) imdb = sb_is_imdb(P.id) ? P.id : sb_is_imdb(P.vid) ? P.vid : "";
+  if (!*imdb) { snprintf(out, cap, "%s", P.vid); return; }
+  char id[80]; snprintf(id, sizeof id, "%.*s", (int)strcspn(imdb, ":"), imdb);
+  if (strcmp(P.type, "series")) { snprintf(out, cap, "%s", id); return; }
+  int season = P.season, episode = P.episode;
+  if (episode <= 0) { const char *last = strrchr(P.vid, ':'); if (last && last[1]) episode = atoi(last + 1); }
+  if (season <= 0 && episode > 0) season = 1;
+  if (season > 0 && episode > 0) snprintf(out, cap, "%s:%d:%d", id, season, episode);
+  else snprintf(out, cap, "%s", id);
+}
 static void load_ext_subs(int n) { if (!P.type[0] || !P.vid[0] || P.isTrailer) return; P.extLoading = 1;
   if (castSubsN >= 0) { int k = castSubsN; castSubsN = -1; SubEntry *l = calloc(16, sizeof *l); memcpy(l, castSubs, sizeof castSubs); P.subReq++; on_subs(l, k, 1, (void *)(uintptr_t)P.subReq); return; } /* cast: the phone's own list */
   if (getenv("SB_PLAY_SUBS")) { SubEntry *l = calloc(16, sizeof *l); int k = 0; char b[4096]; snprintf(b, sizeof b, "%s", getenv("SB_PLAY_SUBS")); /* development: "url,url,..." as the external list */
     for (char *u = strtok(b, ","); u && k < 16; u = strtok(NULL, ",")) { snprintf(l[k].lang, sizeof l[k].lang, "eng"); snprintf(l[k].name, sizeof l[k].name, "English"); snprintf(l[k].url, sizeof l[k].url, "%s", u); l[k].n = k + 1; l[k].from = SUB_FALLBACK; k++; }
     P.subReq++; on_subs(l, k, 1, (void *)(uintptr_t)P.subReq); return; }
-  P.extTry = n; P.subReq++; subs_list(P.type, P.vid, on_subs, (void *)(uintptr_t)P.subReq); }
+  char osid[96]; opensubtitles_video_id(osid, sizeof osid); P.extTry = n; P.subReq++; subs_list(P.type, osid, on_subs, (void *)(uintptr_t)P.subReq); }
 static void load_addon_subs(int n) { if (!P.type[0] || !P.vid[0] || P.isTrailer || getenv("SB_PLAY_SUBS")) return;
   P.adxTry = n; P.adxReq++; P.nSubAddons = subs_addons_for(P.type, P.vid);
   SubQuery q; memset(&q, 0, sizeof q); snprintf(q.type, sizeof q.type, "%s", P.type); snprintf(q.vid, sizeof q.vid, "%s", P.vid); snprintf(q.url, sizeof q.url, "%s", P.url);
