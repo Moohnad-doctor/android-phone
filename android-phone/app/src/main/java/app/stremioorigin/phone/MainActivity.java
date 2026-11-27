@@ -15,6 +15,7 @@ import android.view.WindowInsets;
 import android.view.WindowManager;
 
 import org.libsdl.app.SDLActivity;
+import androidx.compose.ui.platform.ComposeView;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -27,6 +28,7 @@ import android.content.res.AssetManager;
 public class MainActivity extends SDLActivity {
     static MainActivity self;
     private static WifiManager.MulticastLock mcLock;
+    private ComposeView composeHost;
 
     @Override
     protected String[] getLibraries() {
@@ -55,6 +57,9 @@ public class MainActivity extends SDLActivity {
             android.widget.FrameLayout.LayoutParams lp2 = new android.widget.FrameLayout.LayoutParams(side, side, android.view.Gravity.CENTER); cover.addView(mark, lp2);
             if (mLayout != null) { mLayout.addView(cover, new android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)); startCover = cover; cover.postDelayed(MainActivity::firstFrame, 5000); } } catch (Throwable e) { } /* (gone after 5 s whatever happens) */
         if (mSurface != null) { mSurface.setZOrderMediaOverlay(true); mSurface.getHolder().setFormat(android.graphics.PixelFormat.TRANSLUCENT); } /* the app's drawing over the video plane: clear where the picture shows */
+
+        if (mLayout != null) MythComposeHost.attach(this, mLayout);
+        if (mSurface != null) mSurface.setOnLongClickListener(v -> { showComposeHost(); return true; });
 
         Window w = getWindow();
         topRefreshRate(w);
@@ -137,6 +142,22 @@ public class MainActivity extends SDLActivity {
     }
 
     static android.view.ViewGroup layout() { return mLayout; }
+
+    public void setComposeHost(ComposeView host) { composeHost = host; }
+
+    public void showLegacySurface() {
+        runOnUiThread(() -> {
+            if (composeHost != null) composeHost.setVisibility(View.GONE);
+            if (mSurface != null) mSurface.setVisibility(View.VISIBLE);
+        });
+    }
+
+    public void showComposeHost() {
+        runOnUiThread(() -> {
+            if (composeHost != null) composeHost.setVisibility(View.VISIBLE);
+        });
+    }
+
 
     /* a short tick under the finger (a hold has started) */
     /* haptics shaped to what moves: 1 a soft tick (scale = how strong, a hold's ticks rising as it fills), 2 the pop of a hold
