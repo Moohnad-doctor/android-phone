@@ -31,7 +31,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
@@ -43,7 +42,6 @@ object MythComposeHost {
     fun attach(activity: MainActivity, container: ViewGroup) {
         val host = ComposeView(activity).apply {
             layoutDirection = android.view.View.LAYOUT_DIRECTION_RTL
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
                 MythShell(onLegacySurface = activity::showLegacySurface)
             }
